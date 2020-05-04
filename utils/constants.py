@@ -5,10 +5,11 @@ import multiprocessing as _mp
 import glob as _glob
 import re as _re
 from warnings import warn
+from pathlib import Path
 TTYCOLORS = colorama.Fore
 EPS = 1e-5
 DEPOT_TNODE = (0, None)
-DATA_DIR = _os.path.join(_os.path.dirname(__file__),'../data/')
+DATA_DIR = (Path(__file__).parent/'../../../data').resolve()
 
 def _parse_slurm_time(string):
     match = _re.match(r'((?P<days>\d+)-)?(?P<hours>\d+):(?P<mins>\d+):(?P<secs>\d+)', string)

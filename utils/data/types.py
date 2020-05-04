@@ -160,3 +160,16 @@ class AFVSP_Data(ProblemDataBase):
     time_trip_depot: frozendict
     time_trip_station: frozendict
     time_trip_trip: frozendict
+
+@frozen_dataclass
+class ITSRSP_Data(ProblemDataBase):
+    P : range
+    D : range
+    o_depots : frozendict
+    d_depots : frozendict
+
+
+    customer_penalty : frozendict
+    service_time : frozendict
+    travel_time : frozendict
+    travel_cost : frozendict

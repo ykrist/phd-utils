@@ -1,6 +1,7 @@
 from oru import frozendict, LazyHashFrozenDataclass
 import dataclasses
 import itertools
+import re
 
 frozen_dataclass = dataclasses.dataclass(frozen=True)
 
@@ -43,6 +44,45 @@ class RawDataSchrotenboer(RawDataBase):
     max_travel_time : frozendict
     loading_time : float
 
+@frozen_dataclass
+class RawDataHemmati(RawDataBase):
+    num_ports : int
+    num_vessels : int
+    num_cargos : int
+
+    # vessel -> float
+    vessel_start_time : frozendict
+    vessel_capacity : frozendict
+
+    # vessel -> port
+    vessel_start_port : frozendict
+
+    # vehicle -> Set[cargo]
+    vessel_compatible : frozendict
+
+    # cargo -> float
+    cargo_penalty : frozendict
+    cargo_size : frozendict
+
+    # cargo -> port
+    cargo_origin : frozendict
+    cargo_dest : frozendict
+
+    # cargo -> float
+    cargo_origin_tw_start : frozendict
+    cargo_origin_tw_end : frozendict
+    cargo_dest_tw_start : frozendict
+    cargo_dest_tw_end : frozendict
+
+    # vessel,cargo -> float
+    cargo_origin_port_cost : frozendict
+    cargo_origin_port_time : frozendict
+    cargo_dest_port_cost : frozendict
+    cargo_dest_port_time : frozendict
+
+    # vessel,i,j -> float
+    travel_time : frozendict
+    travel_cost : frozendict
 
 def parse_format_schrotenboer(depot_file, geninfo_file, jobs_file, maxtravel_file) -> RawDataSchrotenboer:
     with open(geninfo_file, 'r') as f:
@@ -188,3 +228,127 @@ def parse_format_cordeau(path) -> RawDataCordeau:
             demand = frozendict(demand),
             service_time = frozendict(service_time)
         )
+
+def parse_format_hemmati(path):
+    with open(path, 'r') as f:
+        while True:
+            l = f.readline().strip()
+            if len(l) == 0 or l.startswith('#'):
+                continue
+            break
+
+        num_ports = int(l)
+        f.readline() # number of vessels
+        num_vessels = int(f.readline().strip())
+
+        f.readline() # for each vessel: vessel index, home port, starting time, capacity
+        capacity = {}
+        vehicle_depot = {}
+        vehicle_time = {}
+        for _ in range(num_vessels):
+            l = list(map(int, f.readline().strip().split(',')))
+            v,origin_port,time_avail,cap = l
+            v -= 1
+            vehicle_depot[v] = origin_port-1
+            vehicle_time[v] = time_avail
+            capacity[v] = cap
+
+        f.readline()
+        # number of cargoes
+
+        num_cargo = int(f.readline().strip())
+        f.readline()
+        # for each vessel, vessel index, and then a list of cargoes that can be transported using that vessel
+        vessel_compat = dict()
+        for _ in range(num_vessels):
+            l = list(map(lambda i : int(i) - 1, f.readline().strip().split(',')))
+            vessel_compat[l[0]] = frozenset(l[1:])
+
+        f.readline()
+        # cargo index, origin port, destination port, size, penalty, lb tw pu, ub tw pu, lb tw d, ub tw d
+        cargo_penalty = {}
+        cargo_origin = {}
+        cargo_dest = {}
+        cargo_size = {}
+        cargo_origin_tw_start= {}
+        cargo_origin_tw_end = {}
+        cargo_dest_tw_start= {}
+        cargo_dest_tw_end = {}
+
+        for _ in range(num_cargo):
+            l = map(int, f.readline().strip().split(','))
+            c, p, d, sz,penalty, tw_p_start, tw_p_end,tw_d_start, tw_d_end = l
+            c -= 1
+            p -= 1
+            d -= 1
+            cargo_penalty[c] = penalty
+            cargo_origin[c] = p
+            cargo_dest[c] = d
+            cargo_size[c] = sz
+            cargo_origin_tw_start[c] = tw_p_start
+            cargo_origin_tw_end[c] = tw_p_end
+            cargo_dest_tw_start[c] = tw_d_start
+            cargo_dest_tw_end[c] = tw_d_end
+
+
+        ports = set(cargo_dest.values()) | set(cargo_origin.values()) | set(vehicle_depot.values())
+
+        f.readline()
+        # vessel, origin port, destination port, travel time, travel cost
+
+        travel_time = {}
+        travel_cost = {}
+
+        for _ in range(num_vessels*num_ports*num_ports):
+            v, src, dst, time, cost = map(int, f.readline().strip().split(','))
+            src -= 1
+            dst -= 1
+            if src in ports and dst in ports:
+                v -= 1
+                travel_time[v, src, dst] = time
+                travel_cost[v, src, dst] = cost
+
+        f.readline()
+        # vessel, cargo, origin port time, origin port costs, destination port time, destination port costs
+
+        cargo_origin_port_cost = {}
+        cargo_origin_port_time = {}
+        cargo_dest_port_cost = {}
+        cargo_dest_port_time = {}
+        for _ in range(num_cargo*num_vessels):
+            l = list(map(int, f.readline().strip().split(',')))
+            v,c,p_time,p_cost,d_time,d_cost = l
+            v -= 1
+            c -= 1
+            if p_time < 0:
+                continue # the fuck is this not sparse i don't know
+            cargo_origin_port_cost[v,c] = p_cost
+            cargo_origin_port_time[v,c] = p_time
+            cargo_dest_port_cost[v,c] = d_cost
+            cargo_dest_port_time[v,c] = d_time
+
+        return RawDataHemmati(
+            num_ports = num_ports,
+            num_vessels=num_vessels,
+            num_cargos = num_cargo,
+            vessel_start_time = frozendict(vehicle_time),
+            vessel_capacity = frozendict(capacity),
+            vessel_start_port = frozendict(vehicle_depot),
+            vessel_compatible = frozendict(vessel_compat),
+            cargo_penalty = frozendict(cargo_penalty),
+            cargo_size = frozendict(cargo_size),
+            cargo_origin = frozendict(cargo_origin),
+            cargo_dest = frozendict(cargo_dest),
+            cargo_origin_tw_start = frozendict(cargo_origin_tw_start),
+            cargo_origin_tw_end = frozendict(cargo_origin_tw_end),
+            cargo_dest_tw_start = frozendict(cargo_dest_tw_start),
+            cargo_dest_tw_end = frozendict(cargo_dest_tw_end),
+            cargo_origin_port_time = frozendict(cargo_origin_port_time),
+            cargo_origin_port_cost = frozendict(cargo_origin_port_cost),
+            cargo_dest_port_time = frozendict(cargo_dest_port_time),
+            cargo_dest_port_cost = frozendict(cargo_dest_port_cost),
+            travel_time = frozendict(travel_time),
+            travel_cost = frozendict(travel_cost)
+        )
+
+
