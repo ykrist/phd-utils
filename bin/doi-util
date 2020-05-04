@@ -1,0 +1,357 @@
+#!/usr/bin/env python3
+import tempfile
+import logging
+import shelve
+import bibtexparser
+import sys
+import argparse
+import asyncio
+import aiohttp
+import requests
+import subprocess
+import re
+import tempfile
+import bs4
+import unidecode
+from bibtexparser.bparser import BibTexParser
+
+def tuple_to_cache_key(key):
+    return "\0".join(key)
+
+def cache_key_to_tuple(key):
+    return tuple(key.split("\0"))
+
+DOI_QUERY_CACHE = shelve.open(".doi_cache")
+CACHE_KEY_BIBTEX = lambda doi : tuple_to_cache_key((doi, "bibtex"))
+CACHE_KEY_CSLJSON = lambda doi : tuple_to_cache_key((doi, "csljson"))
+
+
+BIBER_CONVERT_COMMAND = [
+    "biber" ,
+    "--quiet" ,
+    "--tool" ,
+    "--input-format=bibtex" ,
+    "--output-file=/dev/stdout",
+    "--output-indent=4" ,
+    "--nolog" ,
+    "--noconf"
+]
+BIBER_VALIDATE_COMMAND = [
+    "biber",
+    "--tool",
+    "--quiet",
+    "--validate-datamodel",
+    "--output-file=/dev/null",
+    "--nolog",
+    "--noconf"
+]
+
+DIRECTIVES = set()
+def define_preprocess_directive(s):
+    global DIRECTIVES
+    DIRECTIVES.add(s)
+    return s
+
+DIRECTIVE_SKIP_DOI = define_preprocess_directive('SKIP_DOI')
+
+DIRECTIVE_ENTRY_TYPES = {'article', 'thesis', 'phdthesis'}
+
+DIRECTIVE_REGEXP = re.compile(r'(?P<directives>(\+\+(\w+)\s*\n+\s*)+)@(' +'|'.join(DIRECTIVE_ENTRY_TYPES)
+                    + r')\{(?P<key>[a-z]+\d{4}[a-z]?),') # hope this never breaks
+
+DOI_OPTIONAL_TYPES = {'thesis', 'phdthesis'}
+
+SCIHUB_SCRAPE_REGEXP = re.compile(r'https?://sci-hub\.\w+/(?P<doi>.+)')
+
+SCIHUB_DOI_URL_REGEXPS = (
+    SCIHUB_SCRAPE_REGEXP,
+    re.compile(r'https?://(\w+\.)+sci-hub\.tw/doi/abs/(?P<doi>.+)')
+)
+
+DOI_REGEXP = re.compile(r'10\.\d{4}/((\w+\.)+\w+|([\w\(\)]+\-?)+)')
+
+SCIHUB_GENERAL_DOMAIN_REGEXP =  re.compile(r'https?://(\w+\.)+sci-hub\.tw/(.*)')
+
+class ExceptionWithMessage(Exception):
+    def __init__(self, msg):
+        super().__init__()
+        self.msg = msg
+
+class DOIError(ExceptionWithMessage):
+    pass
+
+class BiberError(ExceptionWithMessage):
+    pass
+
+def panic(*args, **kwargs):
+    logging.critical(*args, **kwargs)
+    sys.exit(1)
+
+def convert_bibtex_to_biblatex(text):
+    fp = tempfile.NamedTemporaryFile('w+')
+    fp.write(text)
+    fp.flush()
+    fp.seek(0,0)
+    args = BIBER_CONVERT_COMMAND + [fp.name]
+    logging.info("running: " + " ".join(args))
+    p = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+    fp.close()
+    return p.stdout
+
+def get_doi_org_url(doi):
+    return f"http://doi.org/{doi}"
+
+async def _get_biblatex_from_doi(semaphore : asyncio.Semaphore,
+                                 session : aiohttp.ClientSession,
+                                 doi : str,
+                                 ):
+    async with semaphore:
+        url = get_doi_org_url(doi)
+        logging.info("Retrieving BibTeX data from " + url)
+        async with session.get(url) as response:
+            bibtex_str = await response.text(encoding='utf-8')
+            if response.status == 404:
+                raise DOIError(f"{doi} is not a valid DOI!")
+
+            fp = tempfile.NamedTemporaryFile('w+')
+            fp.write(bibtex_str)
+            fp.flush()
+            args = BIBER_CONVERT_COMMAND + [fp.name]
+            logging.info("running: " + " ".join(args))
+            proc = await asyncio.create_subprocess_exec(*args, stdout=asyncio.subprocess.PIPE)
+            biblatex_str, _ = await proc.communicate()
+            if proc.returncode != 0:
+                fp.seek(0,0)
+                contents = fp.read()
+                fp.close()
+                raise BiberError("failed to convert the following content to BibLaTeX\n" + contents)
+            return biblatex_str.decode()
+
+async def get_biblatex_from_doi_batch(dois):
+    tasks = []
+    sem = asyncio.BoundedSemaphore(100) #maximum of 100 concurrent requests
+    http_headers={"Accept": "application/x-bibtex"}
+    async with aiohttp.ClientSession(headers=http_headers) as session:
+        for doi in dois:
+            tasks.append(_get_biblatex_from_doi(sem, session, doi))
+        results = await asyncio.gather(*tasks)
+    return results
+
+def sanitise_tex_string(s):
+    s = re.sub(r"(?<!\\)&", r"\&", s)
+    return s
+
+url = "https://dx.doi.org/10.1016/j.ejor.2019.11.043"
+scihub_url = 'https://sci-hub.tw/10.1287/opre.1070.0449'
+
+def doi_from_scihub(url) -> str:
+    # first try to find the DOI in the URL string itself.
+    for r in SCIHUB_DOI_URL_REGEXPS:
+        m = r.fullmatch(url)
+        if m is not None:
+            doi = m.group('doi')
+            if DOI_REGEXP.fullmatch(doi):
+                logging.info(f"DOI found in Sci-hub url: {url} ({doi})")
+                return doi
+
+    # use curl here because it sets cookies and shit
+    curlcmd = ['curl','-s', url]
+    logging.info("Exec: {}".format(str(curlcmd)))
+    curlproc = subprocess.run(curlcmd, stdout=subprocess.PIPE, text=True)
+
+    if curlproc.returncode == 51 and SCIHUB_GENERAL_DOMAIN_REGEXP.fullmatch(url):
+        logging.warning("curl failed due to bad SSL cert, domain looks like a sci-hub one so re-running with --insecure.")
+        curlcmd.insert(1, '--insecure')
+        logging.info("Exec: {}".format(str(curlcmd)))
+        curlproc = subprocess.run(curlcmd, stdout=subprocess.PIPE, text=True)
+
+    if curlproc.returncode != 0:
+        panic(f"curl exited with status code {curlproc.returncode}")
+
+    html = curlproc.stdout
+    doc = bs4.BeautifulSoup(html, features="html.parser")
+    try:
+        doi_url = doc.find('div', id='link').find('a')['href']
+    except (AttributeError,KeyError):
+        panic("unable to parse scihub HTML")
+    m = SCIHUB_SCRAPE_REGEXP.fullmatch(doi_url)
+    if m is None:
+        panic(f"Could not extract DOI from HTML: regexp `{SCIHUB_SCRAPE_REGEXP.pattern}` did not match `{doi_url}`")
+    assert m is not None
+    return m.group('doi')
+
+def get_csljson_from_doi(doi):
+    key = CACHE_KEY_CSLJSON(doi)
+
+    result = DOI_QUERY_CACHE.get(key, None)
+    if result is None:
+        url = get_doi_org_url(doi)
+        logging.info(f"CSL JSON not found for DOI {doi}, retrieving from {url}")
+        r = requests.get(url, headers={"Accept": "application/vnd.citationstyles.csl+json"})
+        result = r.json()
+        DOI_QUERY_CACHE[key] = result
+        DOI_QUERY_CACHE.sync()
+        logging.info(f"Cached CSL JSON for DOI {doi}")
+    else:
+        logging.info(f"CSL JSON found for DOI {doi}")
+
+    return result
+
+def cmd_scihub_template(args):
+    if DOI_REGEXP.fullmatch(args.url):
+        doi = args.url
+    else:
+        doi = doi_from_scihub(args.url)
+    csl = get_csljson_from_doi(doi)
+    first_author = list(filter(lambda a : a['sequence'] == 'first', csl['author']))
+    if len(first_author) != 1:
+        panic("bad CSL-JSON: more than one first author")
+    first_author = first_author[0]['family']
+    try:
+        year = str(csl['issued']['date-parts'][0][0])
+    except (KeyError, IndexError):
+        panic("failed to extract year from CSL `issued` field")
+    key = unidecode.unidecode(first_author).lower().split()[-1] + year
+    print(f"@article{{{key},\ndoi={{{doi}}},\n}}\n")
+
+
+def cmd_fill_in(args):
+    input_filename, output_filename = args.input, args.output
+    logging.info("validating input file with: " + " ".join(BIBER_VALIDATE_COMMAND + [input_filename]))
+
+    proc = subprocess.run(BIBER_VALIDATE_COMMAND+ [input_filename], stdout=subprocess.PIPE, text=True)
+    if proc.returncode != 0:
+        panic("input file is invalid, Biber says:\n" + proc.stdout)
+
+    parser = BibTexParser(ignore_nonstandard_types=False)
+
+    skip_doi = set()
+    directive_ranges = []
+    with open(input_filename, 'r') as infile:
+        infile_contents = infile.read()
+
+    # preprocess
+    for match in DIRECTIVE_REGEXP.finditer(infile_contents):
+        key = match.group('key')
+        directives = match.group('directives').split()
+        directives = set(map(lambda x : x.lstrip('+'), directives))
+        unknown_directives = directives - DIRECTIVES
+        if len(unknown_directives) > 0:
+            panic('Unknown directives:\n'+'\n'.join(unknown_directives))
+        directive_ranges.append(match.span('directives'))
+        if DIRECTIVE_SKIP_DOI in directives:
+            skip_doi.add(key)
+
+    for start,end in reversed(directive_ranges):
+        infile_contents = infile_contents[:start] + infile_contents[end:]
+
+    db = bibtexparser.loads(infile_contents, parser)
+
+    missing_dois = {}
+    new_info = {}
+    for i in range(len(db.entries)):
+        bibkey = db.entries[i]['ID']
+        if bibkey in skip_doi:
+            logging.info(f'Skipping DOI query for entry {bibkey} because of ++{DIRECTIVE_SKIP_DOI}')
+            continue
+
+        doi = db.entries[i].get('doi', None)
+        if doi is None:
+            etype = db.entries[i]['ENTRYTYPE']
+            if etype in DOI_OPTIONAL_TYPES:
+                logging.warning(f"Entry {bibkey} does not have a DOI field!")
+                continue
+            else:
+                panic(f"Entry {db.entries[i]['ID']} does not have a DOI field! Required for entry type `{etype}`, "
+                      f"or skip using:\n\t++{DIRECTIVE_SKIP_DOI}\n\t@{etype}{{{bibkey},...")
+
+        new  =  DOI_QUERY_CACHE.get(CACHE_KEY_BIBTEX(doi), None)
+        if new is None:
+            missing_dois[doi] = i
+        else:
+            logging.info(f"found data for {doi} in cache.")
+            new_info[i] = new
+
+    if len(missing_dois) > 0:
+        logging.info(f"need to get {len(missing_dois):d} new entries.")
+
+        try:
+            results = asyncio.run(get_biblatex_from_doi_batch(missing_dois.keys()))
+        except (BiberError, DOIError) as e:
+            panic(e.msg)
+
+        DOI_QUERY_CACHE.update(dict(zip(map(CACHE_KEY_BIBTEX, missing_dois.keys()), results)))
+        DOI_QUERY_CACHE.sync()
+        for doi in missing_dois:
+            logging.info(f"added entry {doi} to cache.")
+        new_info.update(dict(zip(missing_dois.values(), results)))
+
+    for i, bibtex_str in new_info.items():
+        new_entry = bibtexparser.loads(bibtex_str).entries[0]
+        for field,val in new_entry.items():
+            db.entries[i].setdefault(field, sanitise_tex_string(val))
+
+    if output_filename == '-':
+        print(bibtexparser.dumps(db))
+    else:
+        if output_filename is None:
+            import os
+            root, ext = os.path.splitext(input_filename)
+            output_filename = root + '-filled' + ext
+        else:
+            output_filename = output_filename
+        with open(output_filename, 'w') as fp:
+            bibtexparser.dump(db, fp)
+        logging.info(f'wrote {output_filename}')
+
+def cmd_clear(args):
+    logging.info('cleared DOI query cache')
+    DOI_QUERY_CACHE.clear()
+
+
+if __name__ == '__main__':
+    subcommands = ('fill', 'clear', 'scihub-tmpl')
+    argv = sys.argv.copy()[1:]
+    print_usage = False
+    if len(argv) > 0:
+        if argv[0] not in subcommands and argv[0] not in ('-h', '--help'):
+            argv = ['fill'] + argv
+    else:
+        print_usage = True
+
+    p = argparse.ArgumentParser(allow_abbrev=False)
+    subparsers = p.add_subparsers()
+
+    fill = subparsers.add_parser("fill", help="Fill in missing BibLaTeX entries using DOIs.")
+    fill.set_defaults(func=cmd_fill_in)
+    fill.add_argument("input", type=str,nargs='?',default=None,
+                        help="Input BibLaTeX database file, each entry must contain a DOI field.")
+    fill.add_argument("output", type=str, default=None, nargs='?',
+                        help="Output BibLaTex database file, or `-` for STDOUT.")
+
+    clear = subparsers.add_parser("clear", help="Clear the query cache.")
+    clear.set_defaults(func=cmd_clear)
+
+    scihub = subparsers.add_parser("scihub-tmpl",
+                                   help="Convenience command - generates an unfilled BibLaTeX entry from a sci-hub URL.")
+    scihub.set_defaults(func=cmd_scihub_template)
+    scihub.add_argument('url', type=str)
+
+    for sp in [fill, clear, scihub]:
+        sp.add_argument("-v", action='count', default=0, help='Toggle increasing levels of verbosity.  Overrides -q.')
+        sp.add_argument("-q", action='store_true', help="Silence warnings.")
+
+    if print_usage:
+        p.print_usage()
+        sys.exit(1)
+
+    args = p.parse_args(argv)
+    logformat = '[%(levelname)s] %(message)s'
+    if args.v == 0 and args.q:
+        logging.basicConfig(level=logging.ERROR,format=logformat)
+    else:
+        LOG_LEVELS = [logging.WARNING, logging.INFO, logging.DEBUG]
+        logging.basicConfig(level=LOG_LEVELS[min(args.v, len(LOG_LEVELS) - 1)],format=logformat)
+
+    args.func(args)
+

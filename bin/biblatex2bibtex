@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+import bibtexparser
+from bibtexparser.bparser import BibTexParser
+from typing import Dict
+import re
+from collections import defaultdict
+import sys
+
+
+# entrytype -> rules
+FIELD_RULES = defaultdict(list)
+MANUAL_RULES = {}
+
+class FieldRule:
+    def __init__(self, field, entrytypes, func):
+        self.field = field
+        self.func = func
+        self.entrytypes = entrytypes
+
+def field_rule(field, entrytypes=None):
+    if isinstance(entrytypes, str):
+        entrytypes = (entrytypes, )
+
+    def dec(func):
+        rule = FieldRule(field, entrytypes, func)
+        if entrytypes is None:
+            FIELD_RULES[None].append(rule)
+        else:
+            for et in entrytypes:
+                FIELD_RULES[et].append(rule)
+        return func
+
+    return dec
+
+def manual_rule(entryid):
+    if entryid in MANUAL_RULES:
+        raise ValueError("manual rule already defined for: "+entryid)
+    def dec(func):
+        MANUAL_RULES[entryid] = func
+        return func
+    return dec
+
+# ---------------------------------------------------------------------------------------------------------------------
+@field_rule('date')
+def _(value):
+    patterns = (
+        r'(?P<year>(\d{4}|\d{2}))',
+        r'(?P<year>(\d{4}|\d{2}))-(?P<month>\d{1,2})(-(\d{1,2}))?'
+    )
+    for p in patterns:
+        m =re.fullmatch(p, value)
+        if m:
+            return m.groupdict()
+
+    raise Exception
+
+@field_rule('journaltitle')
+def _(value):
+    return {'journal' : value}
+
+@field_rule('institution', entrytypes=('phdthesis','thesis'))
+def _(value):
+    return {'school' : value}
+
+@field_rule('ENTRYTYPE', entrytypes='thesis')
+def _(value):
+    return {'ENTRYTYPE' : 'phdthesis'}
+
+
+if __name__ == '__main__':
+    import argparse
+    p = argparse.ArgumentParser()
+    p.add_argument('input')
+    p.add_argument('output', default='-', nargs='?', type=str)
+    args = p.parse_args()
+
+    parser = BibTexParser(ignore_nonstandard_types=False)
+
+    with open(args.input, 'r') as infile:
+        db = bibtexparser.load(infile, parser)
+
+    entries = db.entries
+
+    for i,e in enumerate(entries):
+        if e['ID'] in MANUAL_RULES:
+            e = MANUAL_RULES[e['ID']](e)
+        else:
+
+            et = e['ENTRYTYPE']
+
+            for rule in FIELD_RULES[et] + FIELD_RULES[None]:
+                if rule.field in e:
+                    e.update(rule.func(e.pop(rule.field)))
+
+        entries[i] = e
+
+    db.entries = entries
+
+    if args.output == '-':
+        print(bibtexparser.dumps(db))
+    else:
+        with open(args.output, 'w') as f:
+            bibtexparser.dump(db, f)

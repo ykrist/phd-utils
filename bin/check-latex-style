@@ -1,0 +1,278 @@
+#!/usr/bin/env python3
+from pylatexenc.latexwalker import *
+from collections import defaultdict
+import re
+import os
+import itertools
+
+HOOKS = dict()
+HOOK_HELP = dict()
+def _build_hook_decorator(cls):
+    HOOKS[cls] = defaultdict(list)
+    def hook_decorator(*matchstr, help=None):
+        def wrapper(hookfunc):
+            for s in matchstr:
+                HOOKS[cls][s].append(hookfunc)
+            if help is not None:
+                HOOK_HELP[hookfunc.__name__] = help
+            return hookfunc
+        return wrapper
+    return hook_decorator
+
+macrohook = _build_hook_decorator(LatexMacroNode)
+envhook = _build_hook_decorator(LatexEnvironmentNode)
+
+class MessageFormatter:
+    def __init__(self, w : LatexWalker, filename, line_contents):
+        self.walker = w
+        self.filename = filename
+        self.line_contents = line_contents
+        self.rulename = ''
+        self.msg_width = 74
+
+    def set_rule_name(self, name : str):
+        self.rulename = name
+
+    def __call__(self, pos, msg):
+        line, col = self.walker.pos_to_lineno_colno(pos)
+        context_before = 40
+        context_after = 40
+
+        start = col - context_after
+        if start <= 0:
+            start = 0
+            prefix = '    '
+        else:
+            prefix = '    ...'
+
+        end = col + context_after
+        context_line =  self.line_contents[line-1]
+        if end > len(context_line):
+            suffix = '...'
+        else:
+            suffix = ''
+        context_line = context_line[start:end]
+
+        print(f"L{line:d}:C{col:d}:({self.rulename}) {msg}")
+        print(prefix + context_line + suffix)
+        print(" "*(len(prefix) + min(context_before, col)) + '^')
+
+LABEL_CONVENTION = {
+    'f' : 'figure',
+    'e' : 'equation',
+    'ta' : 'table',
+    'th' : 'theorem',
+    'c' : 'corollary',
+    'd' : 'definition',
+    'l' : 'lemma',
+    'p' : 'proposition',
+    's' : 'section',
+    'ss' : 'subsection',
+    "ch" : "chapter",
+    'a' : 'algorithm'
+}
+
+SECTIONING_MACROS = {'section', 'subsection', 'chapter'}
+
+TEXT_ABBREVIATIONS = {
+    "eq" : "equation",
+    "cor" : "corollary",
+    "prop" : "proposition",
+    'fig' : 'figure'
+}
+ENVIRONMENTNAME_TO_LABEL = {
+    'align' : 'equation',
+    'prop' : 'proposition',
+    'coro' : 'corollary',
+    'defn' : 'definition',
+    'thm' : 'theorem',
+    'longtable' : 'table',
+}
+
+LABEL_CONVENTION_HELP = "Each label should have the right prefix, as per the table: \n\nPrefix | environment/macro\n" + \
+                        "\n".join(f"{k:>6s} | {v:<s}" for k,v in LABEL_CONVENTION.items())
+
+REGEXP_LABEL = '(?P<prefix>' + '|'.join(LABEL_CONVENTION.keys()) + ')' + r'(\.[a-zA-z_]+)+'
+REGEXP_REF_TEXT_CONSISTENCY = '|'.join(itertools.chain(LABEL_CONVENTION.values(),TEXT_ABBREVIATIONS.keys()))
+REGEXP_REF_TEXT_CONSISTENCY = ".*" +"(?P<excerpt>(?P<txt>" + REGEXP_REF_TEXT_CONSISTENCY + ")\.?\s+)"
+REGEXP_BIBKEY = r'\s*[a-z]+\d{4}[a-z]?\s*'
+
+def is_whitespace(node : LatexCharsNode):
+    if isinstance(node, LatexCharsNode):
+        if re.fullmatch('\s+', node.chars):
+            return True
+    return False
+
+
+def condition_node_is_type(*types):
+    def f(n):
+        return
+    return lambda n : isinstance(n, types)
+
+def condition_node_is_not_type(*types):
+    def f(n):
+        return not isinstance(n, types)
+    return f
+
+def navigate_tree_by_node_condition(node, direction, condition):
+    directions = ('prev', 'next', 'parent')
+    if direction not in directions:
+        raise ValueError('`direction` must be one of: ' + ' '.join(directions))
+    while node is not None:
+        node = getattr(node, direction)
+        if condition(node):
+            return node
+    return None
+
+@macrohook('label', 'ref', 'eqref', help=LABEL_CONVENTION_HELP)
+def label_convention(error, node : LatexMacroNode):
+    arg_node = node.nodeargd.argnlist[0].nodelist[0]
+    label_name = arg_node.chars
+    pos = arg_node.pos
+
+    m = re.match( REGEXP_LABEL, label_name)
+    if m is None:
+        error(pos, f"label does not adhere to convention.")
+        return
+
+    label_type = LABEL_CONVENTION[m.groupdict()['prefix']]
+
+    if node.macroname == 'label':
+        if label_type in SECTIONING_MACROS:
+            node = navigate_tree_by_node_condition(node, 'prev', lambda n : not is_whitespace(n))
+            if not isinstance(node, LatexMacroNode):
+                error(pos, f"{label_type} label does not appear directly after a {label_type} macro.")
+                return
+            word = node.macroname
+        else:
+            n = navigate_tree_by_node_condition(node, 'parent', condition_node_is_type(LatexEnvironmentNode))
+            word = n.environmentname
+            if word not in ENVIRONMENTNAME_TO_LABEL:
+                # last ditch attempt
+                m_node = navigate_tree_by_node_condition(node, 'prev', condition_node_is_type(LatexMacroNode))
+                if m_node is not None and m_node.macroname == 'captionof':
+                    word = m_node.next.nodelist[0].chars
+            else:
+                word = ENVIRONMENTNAME_TO_LABEL[word]
+
+        if label_type != word:
+            error(pos, f"{label_type} label does not match the target type ({word}).")
+
+
+@macrohook('eqref')
+def no_eqref(error, node : LatexMacroNode):
+    error(node.pos, "Don't use \\eqref, use cleveref's \\labelcref (or an alias of)")
+
+@macrohook('ref', help=r"Checks that \ref macros are made in the appropriate textual context.")
+def ref_consistency(error, node : LatexMacroNode):
+    if not isinstance(node.prev, LatexCharsNode):
+        return
+    label_name = node.nodeargd.argnlist[0].nodelist[0].chars
+    m = re.match(REGEXP_LABEL, label_name)
+    if m is None:
+        return
+
+    label_word = LABEL_CONVENTION[m.groupdict()['prefix']]
+    txt =node.prev.chars
+    m = re.fullmatch(REGEXP_REF_TEXT_CONSISTENCY, txt, flags=re.IGNORECASE | re.DOTALL)
+    if m is None:
+        return
+    m = m.groupdict()
+    text_word = m['txt'].lower()
+    text_word = TEXT_ABBREVIATIONS.get(text_word, text_word)
+    if text_word == 'section' and label_word == 'subsection': # this is fine.
+        pass
+    elif text_word != label_word:
+        error(node.pos-len(m['excerpt']), f'Label refers to a {label_word}, but text refers to a {text_word}.')
+
+@macrohook('cite')
+def bib_reference_convention(error, node : LatexMacroNode):
+    refs = node.nodeargd.argnlist[3].nodelist[0].chars
+    for ref in refs.split(','):
+        if re.match(REGEXP_BIBKEY, ref) is None:
+            error(node.pos, "Bibliography key does not adhere to convention (authorYYYY[c]).",
+                  end_pos = node.len+node.pos)
+
+@macrohook('left', 'right')
+def math_autosize_delim(error, node : LatexMacroNode):
+    if node.parsing_state.in_math_mode:
+        error(node.pos, r"\left and \right are shit; use manual resizing like a big boy.")
+
+@envhook('equation', 'equation*')
+def equation_is_deprecated(error, node : LatexEnvironmentNode):
+    error(node.pos, 'Use align instead of equation environment.')
+
+def add_node_attributes(nodelist, parent):
+    for idx in range(len(nodelist)):
+        nodelist[idx].parent = parent
+        if idx > 0:
+            nodelist[idx].prev = nodelist[idx - 1]
+        else:
+            nodelist[idx].prev = None
+        if idx < len(nodelist) - 1:
+            nodelist[idx].next = nodelist[idx + 1]
+        else:
+            nodelist[idx].next = None
+
+def command_check(args):
+
+    fp = open(args.file, "r")
+    contents = fp.read()
+    fp.close()
+
+    w = LatexWalker(contents)
+    msg = MessageFormatter(w, os.path.basename(args.file), contents.split('\n'))
+
+    root_nodes, _, _ = w.get_latex_nodes()
+    add_node_attributes(root_nodes, None)
+
+    def walk(node):
+        if hasattr(node, 'nodelist'):
+            add_node_attributes(node.nodelist, node)
+            for n in node.nodelist:
+                walk(n)
+
+        if isinstance(node, LatexMacroNode):
+            hooks = HOOKS[LatexMacroNode][node.macroname]
+        elif isinstance(node, LatexEnvironmentNode):
+            hooks = HOOKS[LatexEnvironmentNode][node.environmentname]
+        else:
+            hooks = []
+
+        for hook in hooks:
+            msg.set_rule_name(hook.__name__)
+            hook(msg, node)
+
+    for node in root_nodes:
+        walk(node)
+
+def command_help(args):
+    if args.rule in HOOK_HELP:
+        print(HOOK_HELP[args.rule])
+    else:
+        print(f'No help found for rule \'{args.rule}\'')
+
+if __name__ == '__main__':
+    import argparse
+
+    subcommands = ('check', 'help')
+    argv = sys.argv[1:].copy()
+    if len(argv) > 0:
+        if argv[0] not in subcommands and argv[0] not in ('-h', '--help'):
+            argv = ['check'] + argv
+
+    p = argparse.ArgumentParser(allow_abbrev=False)
+    subparsers = p.add_subparsers()
+
+    check = subparsers.add_parser('check', help='Run checks on a file (default).')
+    check.add_argument("file", type=str)
+    check.set_defaults(func=command_check)
+
+    help = subparsers.add_parser('help', help='Show help for a particular rule.')
+    help.add_argument('rule', type=str)
+    help.set_defaults(func=command_help)
+
+    args = p.parse_args(argv)
+
+    args.func(args)
+
