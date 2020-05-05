@@ -163,13 +163,33 @@ class AFVSP_Data(ProblemDataBase):
 
 @frozen_dataclass
 class ITSRSP_Data(ProblemDataBase):
-    P : range
-    D : range
-    o_depots : frozendict
-    d_depots : frozendict
+    n : int
+    # num_v : int
 
+    P : range # 1,...,n
+    D : range # n+1,...,2n
+    V : range # 0,...,v-1
+    # C : range # vehicle classes
+    o_depots : range # -1,...,-v
+    d_depots : range # -v-1,...,-2v
 
+    # v -> FrozenSet[p]
+    P_compatible : frozendict
+
+    # p -> float
     customer_penalty : frozendict
-    service_time : frozendict
+
+    # v -> float
+    vehicle_capacity : frozendict
+
+    # v -> c
+    # vehicle_class: frozendict
+
+    # i -> float
+    demand: frozendict
+    tw_start : frozendict
+    tw_end : frozendict
+
+    # class -> ((i,j) -> float)
     travel_time : frozendict
     travel_cost : frozendict

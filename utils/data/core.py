@@ -1,7 +1,8 @@
 import glob
 import tarfile
-import msgpack
-
+import itertools
+from pathlib import Path
+from typing import Tuple
 from oru import *
 from .parse import *
 from ..constants import DATA_DIR
@@ -9,52 +10,62 @@ from .types import *
 from . import modify
 from . import utils as _u
 
-def data_directory(subdir):
-    path = os.path.join(DATA_DIR, subdir)
-    if not os.path.exists(path):
-        archive = os.path.join(DATA_DIR, "compressed/{}.tar.xz".format(subdir))
+def data_directory(subdir) -> Path:
+    path = DATA_DIR/subdir
+    if not path.exists():
+        archive = DATA_DIR/f"compressed/{subdir}.tar.xz"
         tar = tarfile.open(archive, 'r:xz')
         tar.extractall(DATA_DIR)
         tar.close()
+        assert path.exists()
     return path
 
-class NAME_LOOKUP:
-    _schrotenboer_filepattern_index = None
+# name resolvers should be by dataset not by datatype
+_schrotenboer_filepattern_index = None
+def resolve_name_schrotenboer(name : str) -> Tuple[Path]:
+    global _schrotenboer_filepattern_index
+    if _schrotenboer_filepattern_index is None:
+        root_dir = data_directory("MSPRP_schrotenboer")
+        index_file = root_dir/'INDEX.txt'
+        _schrotenboer_filepattern_index = {}
+        with open(index_file) as f:
+            for line in f:
+                k, v = line.strip().split()
+                _schrotenboer_filepattern_index[k] = tuple(sorted(root_dir.glob(v)))
+    if name not in _schrotenboer_filepattern_index:
+        raise ValueError(f"{name} is not a valid Schrotenboer-instance name")
 
-    @classmethod
-    def SCHROTENBOER(cls, name):
-        if cls._schrotenboer_filepattern_index is None:
-            root_dir = data_directory("MSPRP_schrotenboer")
-            index_file = os.path.join(root_dir,'INDEX.txt')
-            cls._schrotenboer_filepattern_index = {}
-            with open(index_file) as f:
-                for line in f:
-                    k, v = line.strip().split()
-                    cls._schrotenboer_filepattern_index[k] = tuple(sorted(glob.glob(os.path.join(root_dir,v))))
-        if name not in cls._schrotenboer_filepattern_index:
-            raise ValueError(f"{name} is not a valid Schrotenboer-instance name")
+    return _schrotenboer_filepattern_index[name]
 
-        return cls._schrotenboer_filepattern_index[name]
+def resolve_name_cordeau_PDPTW(name : str) -> Path:
+    datasubdir = data_directory("PDPTW_cordeau")
+    path = datasubdir/name
+    if not os.path.exists(path):
+        raise ValueError(f"{name} is not a valid Cordeau-instance name")
+    return path
 
-    @classmethod
-    def PDPTW_CORDEAU(cls, name):
-        datasubdir = data_directory("PDPTW_cordeau")
-        path = os.path.join(datasubdir, name)
-        if not os.path.exists(path):
-            raise ValueError(f"{name} is not a valid Cordeau-instance name")
+
+def resolve_name_cordeau_DARP(name : str) -> Path:
+    datasubdir = data_directory("DARP_cordeau")
+    path = datasubdir/f"{name}.txt"
+    if not os.path.exists(path):
+        raise ValueError(f"{name} is not a valid Cordeau-instance name")
+    return path
+
+def resolve_name_hemmati(name : str) -> Path:
+    datasubdir = data_directory('ITSRSP_hemmati')
+    path = datasubdir/f"{name}.txt"
+    if path.exists():
+       return path
+    raise ValueError(f"{name} is not a recognised ITSRSP Hemmati name")
+
+def resolve_name_homsi(name : str) -> Path:
+    datasubdir = data_directory('ITSRSP_homsi')
+    path = datasubdir/f"{name}.txt"
+    if path.exists():
         return path
+    raise ValueError(f"{name} is not a recognised ITSRSP Homsi name")
 
-    @classmethod
-    def DARP_CORDEAU(cls, name : str):
-        datasubdir = data_directory("DARP_cordeau")
-        path = os.path.join(datasubdir, f"{name}.txt")
-        if not os.path.exists(path):
-            raise ValueError(f"{name} is not a valid Cordeau-instance name")
-        return path
-
-
-#
-#
 # def load_cordeau_instance(path, rehandling_cost=None) -> PDPTW_Data:
 #     with open(path, 'r') as raw:
 #         header = tuple(filter(lambda x: len(x) > 0, raw.readline().strip().split()))
@@ -456,6 +467,92 @@ def build_DARP_from_cordeau(raw : RawDataCordeau, id_str : str) -> DARP_Data:
         id=id_str
     )
 
+def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data:
+    n = raw.num_cargos
+    P = range(1, n+1)
+    D = range(n+1, 2*n + 1)
+    V = range(raw.num_vessels)
+    o_depots = range(-1,-raw.num_vessels-1,-1)
+    d_depots = range(-raw.num_vessels-1, -2*raw.num_vessels-1, -1)# these are dummy depots
+
+    tw_start = {}
+    tw_end = {}
+
+    for p in P:
+        tw_start[p] = raw.cargo_origin_tw_start[p]
+        tw_start[p+n] = raw.cargo_dest_tw_start[p]
+        tw_end[p] = raw.cargo_origin_tw_end[p]
+        tw_end[p+n] = raw.cargo_dest_tw_end[p]
+
+    for v in V:
+        tw_start[o_depots[v]] = raw.vessel_start_time[v]
+        tw_end[o_depots[v]] = float('inf')
+        tw_start[d_depots[v]] = 0
+        tw_end[d_depots[v]] = float('inf')
+
+    travel_time = {}
+    travel_cost = {}
+
+    for v in V:
+        travel_time[v] = {}
+        travel_cost[v] = {}
+
+        for i in P:
+            if i not in raw.vessel_compatible[v]:
+                continue
+            o_port_i = raw.cargo_origin[i]
+            d_port_i = raw.cargo_dest[i]
+            for j in P:
+                if j not in raw.vessel_compatible[v]:
+                    continue
+
+                o_port_j = raw.cargo_origin[j]
+                d_port_j = raw.cargo_dest[j]
+
+                if i != j:
+                    travel_time[v][i,j] = raw.travel_time[v, o_port_i, o_port_j] + raw.cargo_origin_port_time[v, i]
+                    travel_time[v][i+n, j] = raw.travel_time[v, d_port_i, o_port_j] + raw.cargo_dest_port_time[v, i]
+                    travel_time[v][i+n, j+n] = raw.travel_time[v, d_port_i, d_port_j] + raw.cargo_dest_port_time[v,i]
+                    travel_cost[v][i,j] = raw.travel_cost[v, o_port_i, o_port_j] + raw.cargo_origin_port_cost[v, i]
+                    travel_cost[v][i+n, j] = raw.travel_cost[v, d_port_i, o_port_j] + raw.cargo_dest_port_cost[v, i]
+                    travel_cost[v][i+n, j+n] = raw.travel_cost[v, d_port_i, d_port_j] + raw.cargo_dest_port_cost[v,i]
+
+                travel_time[v][i,j+n] = raw.travel_time[v, o_port_i, d_port_j] + raw.cargo_origin_port_time[v, i]
+                travel_cost[v][i,j+n] = raw.travel_cost[v, o_port_i, d_port_j] + raw.cargo_origin_port_cost[v, i]
+
+
+
+            o = o_depots[v]
+            d = d_depots[v]
+
+            travel_time[v][o, i] = raw.travel_time[v,raw.vessel_start_port[v], o_port_i]
+            travel_time[v][i+n, d] = 0 # in Hemmati data, d_depots don't actually exist
+
+            travel_cost[v][o, i] = raw.travel_cost[v,raw.vessel_start_port[v], o_port_i]
+            travel_cost[v][i+n, d] = 0 # in Hemmati data, d_depots don't actually exist
+
+    demand = frozendict(itertools.chain(
+        raw.cargo_size.items(),
+        ((p+n, -sz) for p,sz in raw.cargo_size.items())
+    ))
+
+    return ITSRSP_Data(
+        id=id_str,
+        n=n,
+        P=P,
+        D=D,
+        V=V,
+        o_depots=o_depots,
+        d_depots=d_depots,
+        demand=demand,
+        vehicle_capacity=raw.vessel_capacity,
+        P_compatible=raw.vessel_compatible,
+        customer_penalty=raw.cargo_penalty,
+        tw_start=frozendict(tw_start),
+        tw_end=frozendict(tw_end),
+        travel_time=frozendict((v,frozendict(tt)) for v,tt in travel_time.items()),
+        travel_cost=frozendict((v,frozendict(tc)) for v,tc in travel_cost.items()),
+    )
 
 def get_named_instance_PDPTWLH(name, rehandling_cost=0) -> PDPTWLH_Data:
     problem_group = name[0]
@@ -485,19 +582,32 @@ def get_named_instance_PDPTWLH(name, rehandling_cost=0) -> PDPTWLH_Data:
     else:
         raise Exception
 
-    raw = parse_format_cordeau(NAME_LOOKUP.PDPTW_CORDEAU(name))
+    raw = parse_format_cordeau(resolve_name_cordeau_PDPTW(name))
     data = build_PDPTWLH_from_cordeau(raw, 10000, rehandling_cost, name)
     data = modify.delay_delivery_windows(data, delay_amount)
     return dataclasses.replace(data, id = id_str, Q = vehicle_cap)
 
 
 def get_named_instance_MSPRP(name : str) -> MSPRP_Data:
-    rawdata = parse_format_schrotenboer(*NAME_LOOKUP.SCHROTENBOER(name))
+    rawdata = parse_format_schrotenboer(*resolve_name_schrotenboer(name))
     return build_MSPRP_from_schrotenboer(rawdata, name)
 
 def get_named_instance_DARP(name : str) -> DARP_Data:
-    filename = NAME_LOOKUP.DARP_CORDEAU(name)
+    filename = resolve_name_cordeau_DARP(name)
     raw = parse_format_cordeau(filename)
     data = build_DARP_from_cordeau(raw, name)
     return data
 
+def get_named_instance_ITSRSP(name : str) -> ITSRSP_Data:
+    for resolve in (resolve_name_hemmati, resolve_name_homsi):
+        try:
+            filename = resolve(name)
+            break
+        except ValueError:
+            continue
+    else:
+        raise ValueError(f"{name} is not a valid ITSRSP instance name")
+
+    raw = parse_format_hemmati(filename)
+    data = build_ITSRSP_from_hemmati(raw, name)
+    return data
