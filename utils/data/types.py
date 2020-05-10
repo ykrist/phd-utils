@@ -2,6 +2,7 @@ from oru import frozendict, LazyHashFrozenDataclass
 import dataclasses
 from typing import Union, Sequence
 from . import utils as _u
+from .ipc import MsgPackSerialisableDataclass
 
 frozen_dataclass = dataclasses.dataclass(frozen=True)
 
@@ -162,7 +163,7 @@ class AFVSP_Data(ProblemDataBase):
     time_trip_trip: frozendict
 
 @frozen_dataclass
-class ITSRSP_Data(ProblemDataBase):
+class ITSRSP_Data(ProblemDataBase, MsgPackSerialisableDataclass):
     n : int
     # num_v : int
 
@@ -193,3 +194,13 @@ class ITSRSP_Data(ProblemDataBase):
     # class -> ((i,j) -> float)
     travel_time : frozendict
     travel_cost : frozendict
+
+    @classmethod
+    def from_msgpack(cls, data):
+        for attribute in ('P', 'D','V'):
+            data[attribute] = range(*data[attribute])
+        for attribute in ('o_depots', 'd_depots'):
+            data[attribute] = range(*data[attribute], -1)
+        data['P_compatible'] = frozendict({k : frozenset(v) for k,v in data['P_compatible'].items()})
+
+        return super().from_msgpack(data)

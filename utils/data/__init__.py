@@ -11,7 +11,7 @@ from .core import (
     get_named_instance_DARP,
     get_named_instance_PDPTWLH,
     get_named_instance_MSPRP,
-    get_named_instance_ITSRSP
+    get_named_instance_ITSRSP,
 )
 
 from . import modify, rand, parse

@@ -66,6 +66,14 @@ def resolve_name_homsi(name : str) -> Path:
         return path
     raise ValueError(f"{name} is not a recognised ITSRSP Homsi name")
 
+def resolve_name_hemmati_hdf5(name : str) -> Path:
+    datasubdir = data_directory('ITSRSP_hdf5')
+    path = datasubdir/f'{name}.hdf5'
+    if path.exists():
+        return path
+    raise ValueError(f"{name} is not a recognised ITSRSP HDF5 name")
+
+
 # def load_cordeau_instance(path, rehandling_cost=None) -> PDPTW_Data:
 #     with open(path, 'r') as raw:
 #         header = tuple(filter(lambda x: len(x) > 0, raw.readline().strip().split()))
@@ -486,9 +494,9 @@ def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data
 
     for v in V:
         tw_start[o_depots[v]] = raw.vessel_start_time[v]
-        tw_end[o_depots[v]] = float('inf')
+        tw_end[o_depots[v]] = 1000000000
         tw_start[d_depots[v]] = 0
-        tw_end[d_depots[v]] = float('inf')
+        tw_end[d_depots[v]] = 1000000000
 
     travel_time = {}
     travel_cost = {}
@@ -599,15 +607,15 @@ def get_named_instance_DARP(name : str) -> DARP_Data:
     return data
 
 def get_named_instance_ITSRSP(name : str) -> ITSRSP_Data:
-    for resolve in (resolve_name_hemmati, resolve_name_homsi):
-        try:
-            filename = resolve(name)
-            break
-        except ValueError:
-            continue
-    else:
-        raise ValueError(f"{name} is not a valid ITSRSP instance name")
+    # for resolve in (resolve_name_hemmati, resolve_name_homsi):
+    #     try:
+    #         filename = resolve(name)
+    #         break
+    #     except ValueError:
+    #         continue
+    # else:
+    #     raise ValueError(f"{name} is not a valid ITSRSP instance name")
 
-    raw = parse_format_hemmati(filename)
+    raw = parse_format_hemmati_hdf5(resolve_name_hemmati_hdf5(name))
     data = build_ITSRSP_from_hemmati(raw, name)
     return data

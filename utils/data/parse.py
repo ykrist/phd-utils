@@ -362,9 +362,9 @@ def parse_format_hemmati(path):
 def parse_format_hemmati_hdf5(filename):
     f = h5py.File(filename, 'r')
 
-    num_vessels = f.attrs['num_vessels']
-    num_ports = f.attrs['num_ports']
-    num_cargos = f.attrs['num_cargos']
+    num_vessels = int(f.attrs['num_vessels'])
+    num_ports = int(f.attrs['num_ports'])
+    num_cargos = int(f.attrs['num_cargos'])
 
     vessel_start_time = dict(enumerate(map(int, f['vessel_start_time'][:])))
     vessel_capacity = dict(enumerate(map(int, f['vessel_capacity'][:])))
