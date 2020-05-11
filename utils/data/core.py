@@ -537,15 +537,42 @@ def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data
                 travel_time[v][i,j+n] = raw.travel_time[v, o_port_i, d_port_j] + raw.cargo_origin_port_time[v, i]
                 travel_cost[v][i,j+n] = raw.travel_cost[v, o_port_i, d_port_j] + raw.cargo_origin_port_cost[v, i]
 
-            o = o_depots[v]
-            d = d_depots[v]
+    travel_time_vehicle_origin_depots = {v : {} for v in V}
+    travel_time_vehicle_dest_depots = {v : {} for v in V}
+    for v in V:
+        for i in P:
+            if i not in raw.vessel_compatible[v]:
+                continue
+            o_port_i = raw.cargo_origin[i]
+            travel_time_vehicle_origin_depots[v][i] = raw.travel_time[v, raw.vessel_start_port[v], o_port_i]
+            travel_time_vehicle_dest_depots[v][i+n] = 0  # in Hemmati data, d_depots don't actually exist
 
-            travel_time[v][o, i] = raw.travel_time[v,raw.vessel_start_port[v], o_port_i]
-            travel_time[v][i+n, d] = 0 # in Hemmati data, d_depots don't actually exist
+    vehicle_groups = defaultdict(set)
+    for v in V:
+        key = (
+            frozendict(travel_time[v]),
+            raw.vessel_capacity[v],
+            raw.vessel_compatible[v],
+            frozendict(travel_time_vehicle_origin_depots[v]),
+            frozendict(travel_time_vehicle_dest_depots[v]),
+            raw.vessel_start_time[v]
+        )
+        vehicle_groups[key].add(v)
+    vehicle_groups = frozendict((g,frozenset(grp)) for g,grp in enumerate(vehicle_groups.values()))
 
+    for v in V:
+        o = o_depots[v]
+        d = d_depots[v]
+        travel_time[v].update({(o, i) : t for i,t in travel_time_vehicle_origin_depots[v].items()})
+        travel_time[v].update({(i, d) : t for i,t in travel_time_vehicle_dest_depots[v].items()})
+
+        for i in P:
+            if i not in raw.vessel_compatible[v]:
+                continue
+            o_port_i = raw.cargo_origin[i]
             travel_cost[v][o, i] = raw.travel_cost[v,raw.vessel_start_port[v], o_port_i]
             travel_cost[v][i+n, d] = 0 # in Hemmati data, d_depots don't actually exist
-    #
+
     # for group in port_group.values():
     #     for i,j in itertools.combinations(group, 2):
     #         assert all(travel_time[v][i,j] == raw.cargo_origin_port_time[v,i] for v in V
@@ -574,7 +601,8 @@ def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data
         tw_end=frozendict(tw_end),
         travel_time=frozendict((v,frozendict(tt)) for v,tt in travel_time.items()),
         travel_cost=frozendict((v,frozendict(tc)) for v,tc in travel_cost.items()),
-        port_groups = frozendict((i, frozenset(g)) for g in port_group.values() for i in g)
+        port_groups = frozendict((i, frozenset(g)) for g in port_group.values() for i in g),
+        vehicle_groups=vehicle_groups
     )
 
 def get_named_instance_PDPTWLH(name, rehandling_cost=0) -> PDPTWLH_Data:
@@ -634,3 +662,15 @@ def get_named_instance_ITSRSP(name : str) -> ITSRSP_Data:
     raw = parse_format_hemmati_hdf5(resolve_name_hemmati_hdf5(name))
     data = build_ITSRSP_from_hemmati(raw, name)
     return data
+
+def get_index_file(dataset : str, **kwargs) -> Path:
+    datasets = {
+        'itsrsp' : data_directory("ITSRSP_hdf5")/"INDEX.txt"
+    }
+
+    if dataset not in datasets:
+        raise ValueError(f"no known index file for `{dataset!s}`")
+
+    indexfile = datasets[dataset]
+
+    return indexfile

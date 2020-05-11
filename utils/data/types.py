@@ -200,6 +200,9 @@ class ITSRSP_Data(ProblemDataBase, MsgPackSerialisableDataclass):
     # i -> FrozenSet[i]
     port_groups : frozendict
 
+    # group -> FrozenSet[v]
+    vehicle_groups : frozendict
+
     @classmethod
     def from_msgpack(cls, data):
         for attribute in ('P', 'D','V'):

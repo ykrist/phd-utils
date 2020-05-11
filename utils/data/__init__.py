@@ -8,6 +8,7 @@ from .types import (
 )
 
 from .core import (
+    get_index_file,
     get_named_instance_DARP,
     get_named_instance_PDPTWLH,
     get_named_instance_MSPRP,
