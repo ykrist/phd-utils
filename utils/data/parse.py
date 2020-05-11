@@ -54,9 +54,9 @@ class RawDataHemmati(RawDataBase):
     num_ports: int
     num_vessels: int
     num_cargos: int
-    # cargo indexing starts at 1
+    # cargo indexing starts at 0
     # vessel indexing starts at 0
-    # port indexing starts at 1
+    # port indexing starts at 0
 
     # vessel -> int
     vessel_start_time: frozendict
@@ -261,7 +261,8 @@ def parse_format_hemmati(path):
             l = list(map(int, f.readline().strip().split(',')))
             v, origin_port, time_avail, cap = l
             v -= 1
-            vehicle_depot[v] = origin_port - 1
+            origin_port -= 1
+            vehicle_depot[v] = origin_port
             vehicle_time[v] = time_avail
             capacity[v] = cap
 
@@ -273,8 +274,8 @@ def parse_format_hemmati(path):
         # for each vessel, vessel index, and then a list of cargoes that can be transported using that vessel
         vessel_compat = dict()
         for _ in range(num_vessels):
-            l = list(map(lambda i: int(i), f.readline().strip().split(',')))
-            vessel_compat[l[0] - 1] = frozenset(l[1:])
+            l = list(map(lambda i: int(i)-1, f.readline().strip().split(',')))
+            vessel_compat[l[0]] = frozenset(l[1:])
 
         f.readline()
         # cargo index, origin port, destination port, size, penalty, lb tw pu, ub tw pu, lb tw d, ub tw d
@@ -289,10 +290,13 @@ def parse_format_hemmati(path):
 
         for _ in range(num_cargo):
             l = map(int, f.readline().strip().split(','))
-            c, p, d, sz, penalty, tw_p_start, tw_p_end, tw_d_start, tw_d_end = l
+            c, origin_port, dest_port, sz, penalty, tw_p_start, tw_p_end, tw_d_start, tw_d_end = l
+            c -= 1
+            origin_port -= 1
+            dest_port -= 1
             cargo_penalty[c] = penalty
-            cargo_origin[c] = p
-            cargo_dest[c] = d
+            cargo_origin[c] = origin_port
+            cargo_dest[c] = dest_port
             cargo_size[c] = sz
             cargo_origin_tw_start[c] = tw_p_start
             cargo_origin_tw_end[c] = tw_p_end
@@ -311,6 +315,8 @@ def parse_format_hemmati(path):
             v, src, dst, time, cost = map(int, f.readline().strip().split(','))
             if time < 0: # why is this not sparse
                 continue
+            src -= 1
+            dst -= 1
             if src in ports and dst in ports:
                 v -= 1
                 travel_time[v, src, dst] = time
@@ -327,6 +333,7 @@ def parse_format_hemmati(path):
             l = list(map(int, f.readline().strip().split(',')))
             v, c, p_time, p_cost, d_time, d_cost = l
             v -= 1
+            c -= 1
             if p_time < 0:
                 continue  # why is this not sparse i do not know
             cargo_origin_port_cost[v, c] = p_cost
@@ -372,17 +379,17 @@ def parse_format_hemmati_hdf5(filename):
 
     vessel_compatible = {}
     for v in range(num_vessels):
-        vessel_compatible[v] = frozenset(c+1 for c, compat in enumerate(f['vessel_cargo_compatibility'][v, :]) if compat)
+        vessel_compatible[v] = frozenset(c for c, compat in enumerate(f['vessel_cargo_compatibility'][v, :]) if compat)
 
-    cargo_size = dict((c + 1, int(sz)) for c, sz in enumerate(f['cargo_size'][:]))
-    cargo_origin = dict((c + 1, int(i)) for c, i in enumerate(f['cargo_origin'][:]))
-    cargo_dest = dict((c + 1, int(i)) for c, i in enumerate(f['cargo_dest'][:]))
+    cargo_size = dict((c, int(sz)) for c, sz in enumerate(f['cargo_size'][:]))
+    cargo_origin = dict((c, int(i)) for c, i in enumerate(f['cargo_origin'][:]))
+    cargo_dest = dict((c, int(i)) for c, i in enumerate(f['cargo_dest'][:]))
 
-    cargo_origin_tw_start = dict((c + 1, int(t)) for c, t in enumerate(f['cargo_origin_tw_start'][:]))
-    cargo_origin_tw_end = dict((c + 1, int(t)) for c, t in enumerate(f['cargo_origin_tw_end'][:]))
-    cargo_dest_tw_start = dict((c + 1, int(t)) for c, t in enumerate(f['cargo_dest_tw_start'][:]))
-    cargo_dest_tw_end = dict((c + 1, int(t)) for c, t in enumerate(f['cargo_dest_tw_end'][:]))
-    cargo_penalty = dict((c + 1, int(t)) for c, t in enumerate(f['cargo_penalty'][:]))
+    cargo_origin_tw_start = dict((c, int(t)) for c, t in enumerate(f['cargo_origin_tw_start'][:]))
+    cargo_origin_tw_end = dict((c, int(t)) for c, t in enumerate(f['cargo_origin_tw_end'][:]))
+    cargo_dest_tw_start = dict((c, int(t)) for c, t in enumerate(f['cargo_dest_tw_start'][:]))
+    cargo_dest_tw_end = dict((c, int(t)) for c, t in enumerate(f['cargo_dest_tw_end'][:]))
+    cargo_penalty = dict((c, int(t)) for c, t in enumerate(f['cargo_penalty'][:]))
 
     vc_info = f['vessel_cargo_info']
     cargo_origin_port_time = {}

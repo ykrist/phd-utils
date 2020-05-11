@@ -167,12 +167,12 @@ class ITSRSP_Data(ProblemDataBase, MsgPackSerialisableDataclass):
     n : int
     # num_v : int
 
-    P : range # 1,...,n
-    D : range # n+1,...,2n
+    P : range # 0,...,n-1
+    D : range # n,...,2n-1
     V : range # 0,...,v-1
-    # C : range # vehicle classes
-    o_depots : range # -1,...,-v
-    d_depots : range # -v-1,...,-2v
+
+    o_depots : range # 2n,...,2n+v-1
+    d_depots : range # 2n+v,...,2(n+v)-1
 
     # v -> FrozenSet[p]
     P_compatible : frozendict
@@ -186,14 +186,19 @@ class ITSRSP_Data(ProblemDataBase, MsgPackSerialisableDataclass):
     # v -> c
     # vehicle_class: frozendict
 
-    # i -> float
+    # i -> int
     demand: frozendict
     tw_start : frozendict
     tw_end : frozendict
 
-    # class -> ((i,j) -> float)
+    # class -> ((i,j) -> int)
     travel_time : frozendict
     travel_cost : frozendict
+
+    # Locations within a port group do not have any travel time or travel cost (not counting service time/cost) between
+    # one another.
+    # i -> FrozenSet[i]
+    port_groups : frozendict
 
     @classmethod
     def from_msgpack(cls, data):

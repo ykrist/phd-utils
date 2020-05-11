@@ -477,11 +477,11 @@ def build_DARP_from_cordeau(raw : RawDataCordeau, id_str : str) -> DARP_Data:
 
 def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data:
     n = raw.num_cargos
-    P = range(1, n+1)
-    D = range(n+1, 2*n + 1)
+    P = range(0, n)
+    D = range(n, 2*n)
     V = range(raw.num_vessels)
-    o_depots = range(-1,-raw.num_vessels-1,-1)
-    d_depots = range(-raw.num_vessels-1, -2*raw.num_vessels-1, -1)# these are dummy depots
+    o_depots = range(2*n, 2*n+raw.num_vessels)
+    d_depots = range(2*n+raw.num_vessels, 2*(n+raw.num_vessels)) # these are dummy depots
 
     tw_start = {}
     tw_end = {}
@@ -493,13 +493,21 @@ def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data
         tw_end[p+n] = raw.cargo_dest_tw_end[p]
 
     for v in V:
+        assert o_depots[v] == 2*n+v
+        assert d_depots[v] == 2*n+len(V)+v
         tw_start[o_depots[v]] = raw.vessel_start_time[v]
-        tw_end[o_depots[v]] = 1000000000
+        tw_end[o_depots[v]] = 2**32 - 1
         tw_start[d_depots[v]] = 0
-        tw_end[d_depots[v]] = 1000000000
+        tw_end[d_depots[v]] = 2**32 - 1
 
     travel_time = {}
     travel_cost = {}
+    port_group = defaultdict(list)
+
+    for i in P:
+        port_group[raw.cargo_origin[i]].append(i)
+        port_group[raw.cargo_dest[i]].append(i + n)
+
 
     for v in V:
         travel_time[v] = {}
@@ -510,6 +518,7 @@ def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data
                 continue
             o_port_i = raw.cargo_origin[i]
             d_port_i = raw.cargo_dest[i]
+
             for j in P:
                 if j not in raw.vessel_compatible[v]:
                     continue
@@ -528,8 +537,6 @@ def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data
                 travel_time[v][i,j+n] = raw.travel_time[v, o_port_i, d_port_j] + raw.cargo_origin_port_time[v, i]
                 travel_cost[v][i,j+n] = raw.travel_cost[v, o_port_i, d_port_j] + raw.cargo_origin_port_cost[v, i]
 
-
-
             o = o_depots[v]
             d = d_depots[v]
 
@@ -538,6 +545,13 @@ def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data
 
             travel_cost[v][o, i] = raw.travel_cost[v,raw.vessel_start_port[v], o_port_i]
             travel_cost[v][i+n, d] = 0 # in Hemmati data, d_depots don't actually exist
+    #
+    # for group in port_group.values():
+    #     for i,j in itertools.combinations(group, 2):
+    #         assert all(travel_time[v][i,j] == raw.cargo_origin_port_time[v,i] for v in V
+    #                    if (i,j) in travel_time[v] and (v,i) in raw.cargo_origin_port_time)
+    #         assert all(travel_cost[v][i,j] == raw.cargo_origin_port_cost[v,i] for v in V
+    #                    if (i,j) in travel_time[v] and (v,i) in raw.cargo_origin_port_time)
 
     demand = frozendict(itertools.chain(
         raw.cargo_size.items(),
@@ -560,6 +574,7 @@ def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data
         tw_end=frozendict(tw_end),
         travel_time=frozendict((v,frozendict(tt)) for v,tt in travel_time.items()),
         travel_cost=frozendict((v,frozendict(tc)) for v,tc in travel_cost.items()),
+        port_groups = frozendict((i, frozenset(g)) for g in port_group.values() for i in g)
     )
 
 def get_named_instance_PDPTWLH(name, rehandling_cost=0) -> PDPTWLH_Data:
