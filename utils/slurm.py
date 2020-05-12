@@ -1,12 +1,18 @@
 import oru.slurm
+from pathlib import Path
 
 _SLURM_PYTHON_FILE_TEMPLATE = r"""#!/bin/bash
 conda activate or
 """
 
+# FIXME this is a hack, not portable
+def _repo_root() -> Path:
+    return (Path(__file__).parent/'../../..').resolve()
+
+
 class BaseExperiment(oru.slurm.Experiment):
-    OUTPUTS = {"indexfile" : {"type" : "string", "derived" : True}}
-    ROOT_PATH = 'logs/'
+    OUTPUTS = {"indexfile" : {"type" : "path","coerce":Path, "derived" : True}}
+    ROOT_PATH = _repo_root()/'logs'
 
     def define_derived(self):
         super().define_derived()

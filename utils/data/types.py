@@ -163,6 +163,18 @@ class AFVSP_Data(ProblemDataBase):
     time_trip_trip: frozendict
 
 @frozen_dataclass
+class ITSRSP_Skeleton_Data(ProblemDataBase):
+    n : int
+    V : range
+    P : range
+    D : range
+    V : range
+
+    o_depots : range # 2n,...,2n+v-1
+    d_depots : range # 2n+v,...,2(n+v)-1
+
+
+@frozen_dataclass
 class ITSRSP_Data(ProblemDataBase, MsgPackSerialisableDataclass):
     n : int
     # num_v : int

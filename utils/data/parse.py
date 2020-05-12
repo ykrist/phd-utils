@@ -3,7 +3,7 @@ import dataclasses
 import itertools
 import re
 import h5py
-
+from .types import ITSRSP_Skeleton_Data
 frozen_dataclass = dataclasses.dataclass(frozen=True)
 
 
@@ -429,6 +429,7 @@ def parse_format_hemmati_hdf5(filename):
         })
         k += n
 
+    f.close()
 
     return RawDataHemmati(
         num_ports=num_ports,
@@ -453,3 +454,16 @@ def parse_format_hemmati_hdf5(filename):
         travel_time=frozendict(travel_time),
         travel_cost=frozendict(travel_cost)
     )
+
+def parse_format_hemmati_hdf5_to_skeleton(path) -> ITSRSP_Skeleton_Data:
+    h5 = h5py.File(path, 'r')
+    n = h5.attrs['num_cargos']
+    v = h5.attrs['num_vessels']
+    h5.close()
+    P = range(n)
+    D = range(n, 2*n)
+    V = range(v)
+    o_depots = range(2*n, 2*n+v)
+    d_depots = range(2*n+v, 2*n+2*v)
+
+    return ITSRSP_Skeleton_Data(id="", n=n, P=P, D=D, V=V, o_depots=o_depots, d_depots=d_depots)

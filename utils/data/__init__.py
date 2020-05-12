@@ -4,7 +4,8 @@ from .types import (
     PDPTW_Data,
     MSPRP_Data,
     GenMSPRP_Data,
-    ITSRSP_Data
+    ITSRSP_Data,
+    ITSRSP_Skeleton_Data
 )
 
 from .core import (
@@ -13,6 +14,7 @@ from .core import (
     get_named_instance_PDPTWLH,
     get_named_instance_MSPRP,
     get_named_instance_ITSRSP,
+    get_named_instance_skeleton_ITSRSP
 )
 
 from . import modify, rand, parse

@@ -663,6 +663,12 @@ def get_named_instance_ITSRSP(name : str) -> ITSRSP_Data:
     data = build_ITSRSP_from_hemmati(raw, name)
     return data
 
+
+def get_named_instance_skeleton_ITSRSP(name : str) -> ITSRSP_Skeleton_Data:
+    raw = parse_format_hemmati_hdf5_to_skeleton(resolve_name_hemmati_hdf5(name))
+    return dataclasses.replace(raw, id=name)
+
+
 def get_index_file(dataset : str, **kwargs) -> Path:
     datasets = {
         'itsrsp' : data_directory("ITSRSP_hdf5")/"INDEX.txt"
