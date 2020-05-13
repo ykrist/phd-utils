@@ -537,20 +537,23 @@ def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data
                 travel_time[v][i,j+n] = raw.travel_time[v, o_port_i, d_port_j] + raw.cargo_origin_port_time[v, i]
                 travel_cost[v][i,j+n] = raw.travel_cost[v, o_port_i, d_port_j] + raw.cargo_origin_port_cost[v, i]
 
+    # TODO these can actually be remove, need to adjust lazy constraints though
     travel_time_vehicle_origin_depots = {v : {} for v in V}
     travel_time_vehicle_dest_depots = {v : {} for v in V}
+
     for v in V:
         for i in P:
             if i not in raw.vessel_compatible[v]:
                 continue
             o_port_i = raw.cargo_origin[i]
             travel_time_vehicle_origin_depots[v][i] = raw.travel_time[v, raw.vessel_start_port[v], o_port_i]
-            travel_time_vehicle_dest_depots[v][i+n] = 0  # in Hemmati data, d_depots don't actually exist
+            travel_time_vehicle_dest_depots[v][i+n] = raw.cargo_dest_port_time[v,i]  # in Hemmati data, d_depots don't actually exist
 
     vehicle_groups = defaultdict(set)
     for v in V:
         key = (
             frozendict(travel_time[v]),
+            frozendict(travel_cost[v]),
             raw.vessel_capacity[v],
             raw.vessel_compatible[v],
             frozendict(travel_time_vehicle_origin_depots[v]),
@@ -571,7 +574,7 @@ def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data
                 continue
             o_port_i = raw.cargo_origin[i]
             travel_cost[v][o, i] = raw.travel_cost[v,raw.vessel_start_port[v], o_port_i]
-            travel_cost[v][i+n, d] = 0 # in Hemmati data, d_depots don't actually exist
+            travel_cost[v][i+n, d] = raw.cargo_dest_port_cost[v,i] # in Hemmati data, d_depots don't actually exist
 
     # for group in port_group.values():
     #     for i,j in itertools.combinations(group, 2):
