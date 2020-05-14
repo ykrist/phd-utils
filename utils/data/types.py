@@ -171,7 +171,7 @@ class ITSRSP_Skeleton_Data(ProblemDataBase):
     V : range
 
     o_depots : range # 2n,...,2n+v-1
-    d_depots : range # 2n+v,...,2(n+v)-1
+    d_depot : int # 2n+v
 
 
 @frozen_dataclass
@@ -183,8 +183,10 @@ class ITSRSP_Data(ProblemDataBase, MsgPackSerialisableDataclass):
     D : range # n,...,2n-1
     V : range # 0,...,v-1
 
+    # Note: a pretty fundamental assumption is that the vehicles have no defined end location.  This means that all
+    # vehicles can share a single (fake) end loc, which is useful for flow consistency.
     o_depots : range # 2n,...,2n+v-1
-    d_depots : range # 2n+v,...,2(n+v)-1
+    d_depot : int # 2n+v
 
     # v -> FrozenSet[p]
     P_compatible : frozendict
@@ -224,3 +226,93 @@ class ITSRSP_Data(ProblemDataBase, MsgPackSerialisableDataclass):
         data['P_compatible'] = frozendict({k : frozenset(v) for k,v in data['P_compatible'].items()})
 
         return super().from_msgpack(data)
+
+
+
+
+
+
+@frozen_dataclass
+class RawDataBase(LazyHashFrozenDataclass):
+    pass
+
+
+@frozen_dataclass
+class RawDataCordeau(RawDataBase):
+    num_requests: int
+    num_vehicles: int
+    max_route_duration: int
+    max_ride_time: int
+    vehicle_cap: int
+    pos_x: frozendict
+    pos_y: frozendict
+    tw_start: frozendict
+    tw_end: frozendict
+    demand: frozendict
+    service_time: frozendict
+
+
+@frozen_dataclass
+class RawDataSchrotenboer(RawDataBase):
+    num_requests: int
+    num_time_periods: int
+    num_vehicles: int
+    num_servicemen_types: int
+    servicemen_cost: frozendict
+    servicemen_avail: frozendict
+    vehicle_servicemen_cap: frozendict
+    vehicle_parts_cap: frozendict
+    vehicle_speed: frozendict
+    vehicle_travel_cost: frozendict
+    pos_x: frozendict
+    pos_y: frozendict
+    servicemen_demand: frozendict
+    parts_demand: frozendict
+    service_time: frozendict
+    periodic_costs: frozendict
+    max_travel_time: frozendict
+    loading_time: float
+
+
+@frozen_dataclass
+class RawDataHemmati(RawDataBase):
+    num_ports: int
+    num_vessels: int
+    num_cargos: int
+    # cargo indexing starts at 0
+    # vessel indexing starts at 0
+    # port indexing starts at 0
+
+    # vessel -> int
+    vessel_start_time: frozendict
+    vessel_capacity: frozendict
+
+    # vessel -> port
+    vessel_start_port: frozendict
+
+    # vehicle -> Set[cargo]
+    vessel_compatible: frozendict
+
+    # cargo -> int
+    cargo_penalty: frozendict
+    cargo_size: frozendict
+
+    # cargo -> port
+    cargo_origin: frozendict
+    cargo_dest: frozendict
+
+    # cargo -> int
+    cargo_origin_tw_start: frozendict
+    cargo_origin_tw_end: frozendict
+    cargo_dest_tw_start: frozendict
+    cargo_dest_tw_end: frozendict
+
+    # vessel,cargo -> int
+    cargo_origin_port_cost: frozendict
+    cargo_origin_port_time: frozendict
+    cargo_dest_port_cost: frozendict
+    cargo_dest_port_time: frozendict
+
+    # vessel,i,j -> int
+    travel_time: frozendict
+    travel_cost: frozendict

@@ -3,94 +3,8 @@ import dataclasses
 import itertools
 import re
 import h5py
-from .types import ITSRSP_Skeleton_Data
+from .types import *
 frozen_dataclass = dataclasses.dataclass(frozen=True)
-
-
-@frozen_dataclass
-class RawDataBase(LazyHashFrozenDataclass):
-    pass
-
-
-@frozen_dataclass
-class RawDataCordeau(RawDataBase):
-    num_requests: int
-    num_vehicles: int
-    max_route_duration: int
-    max_ride_time: int
-    vehicle_cap: int
-    pos_x: frozendict
-    pos_y: frozendict
-    tw_start: frozendict
-    tw_end: frozendict
-    demand: frozendict
-    service_time: frozendict
-
-
-@frozen_dataclass
-class RawDataSchrotenboer(RawDataBase):
-    num_requests: int
-    num_time_periods: int
-    num_vehicles: int
-    num_servicemen_types: int
-    servicemen_cost: frozendict
-    servicemen_avail: frozendict
-    vehicle_servicemen_cap: frozendict
-    vehicle_parts_cap: frozendict
-    vehicle_speed: frozendict
-    vehicle_travel_cost: frozendict
-    pos_x: frozendict
-    pos_y: frozendict
-    servicemen_demand: frozendict
-    parts_demand: frozendict
-    service_time: frozendict
-    periodic_costs: frozendict
-    max_travel_time: frozendict
-    loading_time: float
-
-
-@frozen_dataclass
-class RawDataHemmati(RawDataBase):
-    num_ports: int
-    num_vessels: int
-    num_cargos: int
-    # cargo indexing starts at 0
-    # vessel indexing starts at 0
-    # port indexing starts at 0
-
-    # vessel -> int
-    vessel_start_time: frozendict
-    vessel_capacity: frozendict
-
-    # vessel -> port
-    vessel_start_port: frozendict
-
-    # vehicle -> Set[cargo]
-    vessel_compatible: frozendict
-
-    # cargo -> int
-    cargo_penalty: frozendict
-    cargo_size: frozendict
-
-    # cargo -> port
-    cargo_origin: frozendict
-    cargo_dest: frozendict
-
-    # cargo -> int
-    cargo_origin_tw_start: frozendict
-    cargo_origin_tw_end: frozendict
-    cargo_dest_tw_start: frozendict
-    cargo_dest_tw_end: frozendict
-
-    # vessel,cargo -> int
-    cargo_origin_port_cost: frozendict
-    cargo_origin_port_time: frozendict
-    cargo_dest_port_cost: frozendict
-    cargo_dest_port_time: frozendict
-
-    # vessel,i,j -> int
-    travel_time: frozendict
-    travel_cost: frozendict
 
 
 def parse_format_schrotenboer(depot_file, geninfo_file, jobs_file, maxtravel_file) -> RawDataSchrotenboer:
@@ -464,6 +378,6 @@ def parse_format_hemmati_hdf5_to_skeleton(path) -> ITSRSP_Skeleton_Data:
     D = range(n, 2*n)
     V = range(v)
     o_depots = range(2*n, 2*n+v)
-    d_depots = range(2*n+v, 2*n+2*v)
+    d_depot = 2*n+v
 
-    return ITSRSP_Skeleton_Data(id="", n=n, P=P, D=D, V=V, o_depots=o_depots, d_depots=d_depots)
+    return ITSRSP_Skeleton_Data(id="", n=n, P=P, D=D, V=V, o_depots=o_depots, d_depot=d_depot)
