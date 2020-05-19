@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Tuple
 from oru import *
 from .parse import *
-from ..constants import DATA_DIR
+from ..constants import DATA_DIR, ITSRSP_TIME_INFINITY
 from .types import *
 from . import modify
 from . import utils as _u
@@ -539,32 +539,39 @@ def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data
             travel_time[v][i+n, d_depot] = raw.cargo_dest_port_time[v, i]
             travel_cost[v][i+n, d_depot] = raw.cargo_dest_port_cost[v, i]
 
-    # TODO these can actually be removed, need to adjust lazy constraints though
-    travel_time_vehicle_origin_depots = {v : {} for v in V}
+    # These are allowed to be different for vehicles in the same group
+    travel_time_vehicle_origin_depot = {v : {} for v in V}
+    travel_cost_vehicle_origin_depot = {v: {} for v in V}
+
 
     for v in V:
+        od_port = raw.vessel_start_port[v]
         for i in P:
             if i not in raw.vessel_compatible[v]:
                 continue
+
             o_port_i = raw.cargo_origin[i]
-            travel_time_vehicle_origin_depots[v][i] = raw.travel_time[v, raw.vessel_start_port[v], o_port_i]
+            travel_time_vehicle_origin_depot[v][i] = raw.travel_time[v, od_port, o_port_i]
+            travel_cost_vehicle_origin_depot[v][i] = raw.travel_cost[v, od_port, o_port_i]
 
     vehicle_groups = defaultdict(set)
+    # TODO some of these can actually be removed, need to adjust lazy constraints though
     for v in V:
         key = (
             frozendict(travel_time[v]),
             frozendict(travel_cost[v]),
             raw.vessel_capacity[v],
             raw.vessel_compatible[v],
-            frozendict(travel_time_vehicle_origin_depots[v]),
-            raw.vessel_start_time[v]
+            frozendict(travel_time_vehicle_origin_depot[v]), # TODO remove
+            raw.vessel_start_time[v] # TODO remove
         )
         vehicle_groups[key].add(v)
     vehicle_groups = frozendict((g,frozenset(grp)) for g,grp in enumerate(vehicle_groups.values()))
 
+    # Now, after grouping, we may merge the travel_times and travel_costs to/from depots
     for v in V:
         o = o_depots[v]
-        travel_time[v].update({(o, i) : t for i,t in travel_time_vehicle_origin_depots[v].items()})
+        travel_time[v].update({(o, i) : t for i,t in travel_time_vehicle_origin_depot[v].items()})
 
         for i in P:
             if i not in raw.vessel_compatible[v]:

@@ -6,30 +6,32 @@ from .ipc import MsgPackSerialisableDataclass
 
 frozen_dataclass = dataclasses.dataclass(frozen=True)
 
+
 @frozen_dataclass
 class ProblemDataBase(LazyHashFrozenDataclass):
-    id : str
+    id: str
+
 
 @frozen_dataclass
 class DARP_Data(ProblemDataBase):
-    travel_time : frozendict #+idx:IJ
+    travel_time: frozendict  # +idx:IJ
     # service_time : frozendict #+idx:I
-    travel_cost : frozendict #+idx:IJ
-    demand : frozendict #+idx:IJ
-    loc : frozendict #+idx:I
-    tw_start : frozendict #+idx:I
-    tw_end : frozendict #+idx:I
+    travel_cost: frozendict  # +idx:IJ
+    demand: frozendict  # +idx:IJ
+    loc: frozendict  # +idx:I
+    tw_start: frozendict  # +idx:I
+    tw_end: frozendict  # +idx:I
 
     # Note: the max_ride_time includes the service time, but service_time is needed for some modify.* functionality
-    service_time : frozendict #+idx:I
-    max_ride_time: frozendict #+idx:I
-    capacity : int
+    service_time: frozendict  # +idx:I
+    max_ride_time: frozendict  # +idx:I
+    capacity: int
 
-    n : int
-    P : range
-    D : range
-    K : range
-    N : range
+    n: int
+    P: range
+    D: range
+    K: range
+    N: range
 
 
 @frozen_dataclass
@@ -46,41 +48,42 @@ class PDPTW_Data(ProblemDataBase):
     delivery_loc: range
     vehicle_cost: float
 
+
 @frozen_dataclass
 class PDPTWLH_Data(PDPTW_Data):
-    rehandle_cost : float
+    rehandle_cost: float
 
 
 @frozen_dataclass
 class GenMSPRP_Data(ProblemDataBase):
     # indexed by i,l
-    servicemen_demand : frozendict
+    servicemen_demand: frozendict
     # indexed by l,t
-    servicemen_max : frozendict
+    servicemen_max: frozendict
     # indexed by k,t
-    servicemen_capacity : frozendict
+    servicemen_capacity: frozendict
     # indexed by l,t
-    servicemen_cost : frozendict
+    servicemen_cost: frozendict
     # indexed by i
-    service_time : frozendict
+    service_time: frozendict
     # indexed by i,j,k,t
-    travel_time : frozendict
+    travel_time: frozendict
     # indexed by i,j,k,t
-    travel_cost : frozendict
+    travel_cost: frozendict
     # indexed by i
-    parts_demand : frozendict
+    parts_demand: frozendict
     # indexed by k
-    parts_capacity : frozendict
+    parts_capacity: frozendict
     # indexed by k,t
-    travel_time_max : frozendict
+    travel_time_max: frozendict
 
-    nr : int
-    Nd : range
-    Np : range
-    T : range
-    L : range
-    K : range
-    loc : frozendict
+    nr: int
+    Nd: range
+    Np: range
+    T: range
+    L: range
+    K: range
+    loc: frozendict
 
 
 @frozen_dataclass
@@ -89,7 +92,8 @@ class MSPRP_Data(GenMSPRP_Data):
     # likewise servicemen_cost,servicemen_max are indexed only by l, not (l,t)
 
     # indexed by i,t
-    late_penalty : frozendict
+    late_penalty: frozendict
+
     #
     # def convert_to_general_form(self) -> GenMSPRP_Data:
     #     travel_time = {(i,j,k,t) : v for (i,j,k),v in self.travel_time.items() for t in self.T}
@@ -117,23 +121,22 @@ class MSPRP_Data(GenMSPRP_Data):
     #         id=self.id
     #     )
 
-
-    def reduce_size(self, req_keep: Union[int,Sequence]):
+    def reduce_size(self, req_keep: Union[int, Sequence]):
         node_map, num_req_keep = _u.get_node_map(req_keep, self.nr)
+
 
 @frozen_dataclass
 class AFVSP_Data(ProblemDataBase):
-    T : range
-    S : range
-    D : range
+    T: range
+    S: range
+    D: range
 
+    num_buses: frozendict
 
-    num_buses : frozendict
+    fuel_capacity: float
 
-    fuel_capacity : float
-
-    start_time_trip : frozendict
-    end_time_trip : frozendict
+    start_time_trip: frozendict
+    end_time_trip: frozendict
 
     cost_trip: frozendict
     fuel_trip: frozendict
@@ -162,74 +165,72 @@ class AFVSP_Data(ProblemDataBase):
     time_trip_station: frozendict
     time_trip_trip: frozendict
 
+
 @frozen_dataclass
 class ITSRSP_Skeleton_Data(ProblemDataBase):
-    n : int
-    V : range
-    P : range
-    D : range
-    V : range
+    n: int
+    V: range
+    P: range
+    D: range
+    V: range
 
-    o_depots : range # 2n,...,2n+v-1
+    o_depots: range  # 2n,...,2n+v-1
     d_depot : int # 2n+v
 
 
 @frozen_dataclass
 class ITSRSP_Data(ProblemDataBase, MsgPackSerialisableDataclass):
-    n : int
+    n: int
     # num_v : int
 
-    P : range # 0,...,n-1
-    D : range # n,...,2n-1
-    V : range # 0,...,v-1
+    P: range  # 0,...,n-1
+    D: range  # n,...,2n-1
+    V: range  # 0,...,v-1
 
     # Note: a pretty fundamental assumption is that the vehicles have no defined end location.  This means that all
-    # vehicles can share a single (fake) end loc, which is useful for flow consistency.
-    o_depots : range # 2n,...,2n+v-1
+    # vehicles can share a single (fake) end loc, which is useful for flow consistency.  Adding backarcs will not solve
+    # this problem.
+    o_depots: range  # 2n,...,2n+v-1
     d_depot : int # 2n+v
 
     # v -> FrozenSet[p]
-    P_compatible : frozendict
+    P_compatible: frozendict
 
     # p -> float
-    customer_penalty : frozendict
+    customer_penalty: frozendict
 
     # v -> float
-    vehicle_capacity : frozendict
+    vehicle_capacity: frozendict
 
     # v -> c
     # vehicle_class: frozendict
 
     # i -> int
     demand: frozendict
-    tw_start : frozendict
-    tw_end : frozendict
+    tw_start: frozendict
+    tw_end: frozendict
 
     # class -> ((i,j) -> int)
-    travel_time : frozendict
-    travel_cost : frozendict
+    travel_time: frozendict
+    travel_cost: frozendict
 
     # Locations within a port group do not have any travel time or travel cost (not counting service time/cost) between
     # one another.
     # i -> FrozenSet[i]
-    port_groups : frozendict
+    port_groups: frozendict
 
     # group -> FrozenSet[v]
-    vehicle_groups : frozendict
+    vehicle_groups: frozendict
 
     @classmethod
     def from_msgpack(cls, data):
-        for attribute in ('P', 'D','V'):
+        for attribute in ('P', 'D', 'V'):
             data[attribute] = range(*data[attribute])
         for attribute in ('o_depots', 'd_depots'):
             data[attribute] = range(*data[attribute], -1)
-        data['P_compatible'] = frozendict({k : frozenset(v) for k,v in data['P_compatible'].items()})
+        data['P_compatible'] = frozendict({k: frozenset(v) for k, v in data['P_compatible'].items()})
 
         return super().from_msgpack(data)
-
-
-
-
 
 
 @frozen_dataclass

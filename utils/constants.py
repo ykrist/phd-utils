@@ -10,7 +10,7 @@ TTYCOLORS = colorama.Fore
 EPS = 1e-5
 DEPOT_TNODE = (0, None)
 DATA_DIR = (Path(__file__).parent/'../../../data').resolve()
-TIME_INFINITY = (2**32) - 1
+ITSRSP_TIME_INFINITY = (2 ** 32) - 1
 def _parse_slurm_time(string):
     match = _re.match(r'((?P<days>\d+)-)?(?P<hours>\d+):(?P<mins>\d+):(?P<secs>\d+)', string)
     if match is None:
