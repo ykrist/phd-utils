@@ -555,15 +555,13 @@ def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data
             travel_cost_vehicle_origin_depot[v][i] = raw.travel_cost[v, od_port, o_port_i]
 
     vehicle_groups = defaultdict(set)
-    # TODO some of these can actually be removed, need to adjust lazy constraints though
+
     for v in V:
         key = (
             frozendict(travel_time[v]),
             frozendict(travel_cost[v]),
             raw.vessel_capacity[v],
             raw.vessel_compatible[v],
-            # frozendict(travel_time_vehicle_origin_depot[v]), # TODO remove
-            # raw.vessel_start_time[v] # TODO remove
         )
         vehicle_groups[key].add(v)
     vehicle_groups = frozendict((g,frozenset(grp)) for g,grp in enumerate(vehicle_groups.values()))
