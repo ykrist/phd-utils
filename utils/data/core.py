@@ -565,12 +565,19 @@ def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data
         )
         vehicle_groups[key].add(v)
     vehicle_groups = frozendict((g,frozenset(grp)) for g,grp in enumerate(vehicle_groups.values()))
-
+    vehicle_groups_inv = {v : vg for v in V for vg,V in vehicle_groups.items()}
     # Now, after grouping, we may merge the travel_times and travel_costs to/from depots
-    for v in V:
-        o = o_depots[v]
-        travel_time[v].update({(o, i) : t for i,t in travel_time_vehicle_origin_depot[v].items()})
-        travel_cost[v].update({(o, i) : t for i,t in travel_cost_vehicle_origin_depot[v].items()})
+    travel_time_vg = {}
+    travel_cost_vg = {}
+    for vg, Vg in vehicle_groups.items():
+        travel_time_vg[vg] = travel_time[take(Vg)]
+        travel_cost_vg[vg] = travel_cost[take(Vg)]
+        for v in Vg:
+            del travel_time[v]
+            del travel_cost[v]
+            o = o_depots[v]
+            travel_time_vg[vg].update({(o, i) : t for i,t in travel_time_vehicle_origin_depot[v].items()})
+            travel_cost_vg[vg].update({(o, i) : t for i,t in travel_cost_vehicle_origin_depot[v].items()})
 
     # for group in port_group.values():
     #     for i,j in itertools.combinations(group, 2):
@@ -598,8 +605,8 @@ def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data
         customer_penalty=raw.cargo_penalty,
         tw_start=frozendict(tw_start),
         tw_end=frozendict(tw_end),
-        travel_time=frozendict((v,frozendict(tt)) for v,tt in travel_time.items()),
-        travel_cost=frozendict((v,frozendict(tc)) for v,tc in travel_cost.items()),
+        travel_time=frozendict((v,frozendict(tt)) for v,tt in travel_time_vg.items()),
+        travel_cost=frozendict((v,frozendict(tc)) for v,tc in travel_cost_vg.items()),
         port_groups = frozendict((i, frozenset(g)) for g in port_group.values() for i in g),
         vehicle_groups=vehicle_groups
     )

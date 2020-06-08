@@ -210,7 +210,7 @@ class ITSRSP_Data(ProblemDataBase, MsgPackSerialisableDataclass):
     tw_start: frozendict
     tw_end: frozendict
 
-    # class -> ((i,j) -> int)
+    # vg -> ((i,j) -> int)
     travel_time: frozendict
     travel_cost: frozendict
 
