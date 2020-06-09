@@ -565,19 +565,33 @@ def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data
         )
         vehicle_groups[key].add(v)
     vehicle_groups = frozendict((g,frozenset(grp)) for g,grp in enumerate(vehicle_groups.values()))
-    vehicle_groups_inv = {v : vg for v in V for vg,V in vehicle_groups.items()}
+    vehicle_groups_inv = frozendict((v,vg) for vg,Vg in vehicle_groups.items() for v in Vg)
+
     # Now, after grouping, we may merge the travel_times and travel_costs to/from depots
     travel_time_vg = {}
     travel_cost_vg = {}
+    capacity_vg = {}
+    P_compat_vg = {}
+    char_v = {}
     for vg, Vg in vehicle_groups.items():
-        travel_time_vg[vg] = travel_time[take(Vg)]
-        travel_cost_vg[vg] = travel_cost[take(Vg)]
+        v = min(Vg)
+        travel_time_vg[vg] = travel_time[v]
+        travel_cost_vg[vg] = travel_cost[v]
+        capacity_vg[vg] = raw.vessel_capacity[v]
+        P_compat_vg[vg] = raw.vessel_compatible[v]
+
         for v in Vg:
             del travel_time[v]
             del travel_cost[v]
             o = o_depots[v]
             travel_time_vg[vg].update({(o, i) : t for i,t in travel_time_vehicle_origin_depot[v].items()})
             travel_cost_vg[vg].update({(o, i) : t for i,t in travel_cost_vehicle_origin_depot[v].items()})
+
+        for p in P_compat_vg[vg]:
+            _, v_char = min(
+                (max(tw_start[o_depots[v]] + travel_time_vehicle_origin_depot[v][p], tw_start[p]), v) for v in Vg
+            )
+            char_v[vg,p] = v_char
 
     # for group in port_group.values():
     #     for i,j in itertools.combinations(group, 2):
@@ -600,15 +614,17 @@ def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data
         o_depots=o_depots,
         d_depot=d_depot,
         demand=demand,
-        vehicle_capacity=raw.vessel_capacity,
-        P_compatible=raw.vessel_compatible,
+        vehicle_capacity=frozendict(capacity_vg),
+        P_compatible=frozendict(P_compat_vg),
         customer_penalty=raw.cargo_penalty,
         tw_start=frozendict(tw_start),
         tw_end=frozendict(tw_end),
         travel_time=frozendict((v,frozendict(tt)) for v,tt in travel_time_vg.items()),
         travel_cost=frozendict((v,frozendict(tc)) for v,tc in travel_cost_vg.items()),
         port_groups = frozendict((i, frozenset(g)) for g in port_group.values() for i in g),
-        vehicle_groups=vehicle_groups
+        vehicle_groups=vehicle_groups,
+        group_by_vehicle=vehicle_groups_inv,
+        char_vehicle=frozendict(char_v)
     )
 
 def get_named_instance_PDPTWLH(name, rehandling_cost=0) -> PDPTWLH_Data:

@@ -193,17 +193,14 @@ class ITSRSP_Data(ProblemDataBase, MsgPackSerialisableDataclass):
     o_depots: range  # 2n,...,2n+v-1
     d_depot : int # 2n+v
 
-    # v -> FrozenSet[p]
+    # vg -> FrozenSet[p]
     P_compatible: frozendict
 
     # p -> float
     customer_penalty: frozendict
 
-    # v -> float
+    # vg -> float
     vehicle_capacity: frozendict
-
-    # v -> c
-    # vehicle_class: frozendict
 
     # i -> int
     demand: frozendict
@@ -219,8 +216,13 @@ class ITSRSP_Data(ProblemDataBase, MsgPackSerialisableDataclass):
     # i -> FrozenSet[i]
     port_groups: frozendict
 
-    # group -> FrozenSet[v]
+    # vg -> FrozenSet[v]
     vehicle_groups: frozendict
+    # v -> vg
+    group_by_vehicle: frozendict
+
+    # vg,p -> v
+    char_vehicle : frozendict
 
     @classmethod
     def from_msgpack(cls, data):
