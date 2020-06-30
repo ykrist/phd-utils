@@ -67,7 +67,7 @@ def resolve_name_homsi(name : str) -> Path:
     raise ValueError(f"{name} is not a recognised ITSRSP Homsi name")
 
 def resolve_name_hemmati_hdf5(name : str) -> Path:
-    datasubdir = data_directory('ITSRSP_hdf5')
+    datasubdir = data_directory('ITSRSP_hdf5_ti')
     path = datasubdir/f'{name}.hdf5'
     if path.exists():
         return path
@@ -693,7 +693,7 @@ def get_named_instance_skeleton_ITSRSP(name : str) -> ITSRSP_Skeleton_Data:
 
 def get_index_file(dataset : str, **kwargs) -> Path:
     datasets = {
-        'itsrsp' : data_directory("ITSRSP_hdf5")/"INDEX.txt"
+        'itsrsp' : data_directory("ITSRSP_hdf5_ti")/"INDEX.txt"
     }
 
     if dataset not in datasets:
