@@ -1,6 +1,6 @@
 from oru import frozendict, LazyHashFrozenDataclass
 import dataclasses
-from typing import Union, Sequence
+from typing import Union, Sequence, FrozenSet, Tuple
 from . import utils as _u
 from .ipc import MsgPackSerialisableDataclass
 
@@ -177,6 +177,12 @@ class ITSRSP_Skeleton_Data(ProblemDataBase):
     o_depots: range  # 2n,...,2n+v-1
     d_depot : int # 2n+v
 
+VehicleGroup=int
+Vehicle=int
+Loc = int
+Time = int
+Cost = int
+Demand = int
 
 @frozen_dataclass
 class ITSRSP_Data(ProblemDataBase, MsgPackSerialisableDataclass):
@@ -194,35 +200,35 @@ class ITSRSP_Data(ProblemDataBase, MsgPackSerialisableDataclass):
     d_depot : int # 2n+v
 
     # vg -> FrozenSet[p]
-    P_compatible: frozendict
+    P_compatible: frozendict[VehicleGroup, FrozenSet[Loc]]
 
     # p -> float
-    customer_penalty: frozendict
+    customer_penalty: frozendict[Loc, Cost]
 
     # vg -> float
-    vehicle_capacity: frozendict
+    vehicle_capacity: frozendict[VehicleGroup, Demand]
 
     # i -> int
-    demand: frozendict
-    tw_start: frozendict
-    tw_end: frozendict
+    demand: frozendict[Loc, Demand]
+    tw_start: frozendict[Loc, Time]
+    tw_end: frozendict[Loc, Time]
 
     # vg -> ((i,j) -> int)
-    travel_time: frozendict
-    travel_cost: frozendict
+    travel_time: frozendict[VehicleGroup,frozendict[Tuple[Loc,Loc], Time]]
+    travel_cost: frozendict[VehicleGroup,frozendict[Tuple[Loc,Loc], Cost]]
 
     # Locations within a port group do not have any travel time or travel cost (not counting service time/cost) between
     # one another.
     # i -> FrozenSet[i]
-    port_groups: frozendict
+    port_groups: frozendict[Loc, FrozenSet[Loc]]
 
     # vg -> FrozenSet[v]
-    vehicle_groups: frozendict
+    vehicle_groups: frozendict[VehicleGroup, FrozenSet[Vehicle]]
     # v -> vg
-    group_by_vehicle: frozendict
+    group_by_vehicle: frozendict[Vehicle, VehicleGroup]
 
     # vg,p -> v
-    char_vehicle : frozendict
+    char_vehicle : frozendict[Tuple[VehicleGroup, Loc], Vehicle]
 
     @classmethod
     def from_msgpack(cls, data):
