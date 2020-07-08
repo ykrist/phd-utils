@@ -202,6 +202,11 @@ class ITSRSP_Data(ProblemDataBase, MsgPackSerialisableDataclass):
     # vg -> FrozenSet[p]
     P_compatible: frozendict[VehicleGroup, FrozenSet[Loc]]
 
+    # If we group vehicles without keying on their compatibilities, this attribute will contain the customers which are
+    # not compatible for a given vehicle.  In this case, P_compatible should be treated has 'maybe compatible', in the
+    # sense that at least one vehicle in the group can service any given customer.
+    P_incompatible: Union[None, frozendict[Vehicle, FrozenSet[Loc]]]
+
     # p -> float
     customer_penalty: frozendict[Loc, Cost]
 

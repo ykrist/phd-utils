@@ -593,12 +593,173 @@ def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data
             )
             char_v[vg,p] = v_char
 
-    # for group in port_group.values():
-    #     for i,j in itertools.combinations(group, 2):
-    #         assert all(travel_time[v][i,j] == raw.cargo_origin_port_time[v,i] for v in V
-    #                    if (i,j) in travel_time[v] and (v,i) in raw.cargo_origin_port_time)
-    #         assert all(travel_cost[v][i,j] == raw.cargo_origin_port_cost[v,i] for v in V
-    #                    if (i,j) in travel_time[v] and (v,i) in raw.cargo_origin_port_time)
+    demand = frozendict(itertools.chain(
+        raw.cargo_size.items(),
+        ((p+n, -sz) for p,sz in raw.cargo_size.items())
+    ))
+
+    return ITSRSP_Data(
+        id=id_str,
+        n=n,
+        P=P,
+        D=D,
+        V=V,
+        o_depots=o_depots,
+        d_depot=d_depot,
+        demand=demand,
+        vehicle_capacity=frozendict(capacity_vg),
+        P_compatible=frozendict(P_compat_vg),
+        P_incompatible=None,
+        customer_penalty=raw.cargo_penalty,
+        tw_start=frozendict(tw_start),
+        tw_end=frozendict(tw_end),
+        travel_time=frozendict((v,frozendict(tt)) for v,tt in travel_time_vg.items()),
+        travel_cost=frozendict((v,frozendict(tc)) for v,tc in travel_cost_vg.items()),
+        port_groups = frozendict((i, frozenset(g)) for g in port_group.values() for i in g),
+        vehicle_groups=vehicle_groups,
+        group_by_vehicle=vehicle_groups_inv,
+        char_vehicle=frozendict(char_v)
+    )
+
+
+def build_ITSRSP_from_hemmati_aggressive_grouping(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data:
+    n = raw.num_cargos
+    P = range(0, n)
+    D = range(n, 2*n)
+    V = range(raw.num_vessels)
+    o_depots = range(2*n, 2*n+raw.num_vessels)
+    d_depot = 2*n+raw.num_vessels
+
+    tw_start = {}
+    tw_end = {}
+
+    for p in P:
+        tw_start[p] = raw.cargo_origin_tw_start[p]
+        tw_start[p+n] = raw.cargo_dest_tw_start[p]
+        tw_end[p] = raw.cargo_origin_tw_end[p]
+        tw_end[p+n] = raw.cargo_dest_tw_end[p]
+
+    for v in V:
+        tw_start[o_depots[v]] = raw.vessel_start_time[v]
+        tw_end[o_depots[v]] = 2**32 - 1
+
+    tw_start[d_depot] = 0
+    tw_end[d_depot] = 2**32 - 1
+
+    travel_time = {}
+    travel_cost = {}
+    port_group = defaultdict(list)
+
+    for i in P:
+        port_group[raw.cargo_origin[i]].append(i)
+        port_group[raw.cargo_dest[i]].append(i + n)
+
+
+    for v in V:
+        travel_time[v] = {}
+        travel_cost[v] = {}
+
+        for i in P:
+            if i not in raw.vessel_compatible[v]:
+                continue
+            o_port_i = raw.cargo_origin[i]
+            d_port_i = raw.cargo_dest[i]
+
+            for j in P:
+                if j not in raw.vessel_compatible[v]:
+                    continue
+
+                o_port_j = raw.cargo_origin[j]
+                d_port_j = raw.cargo_dest[j]
+
+                if i != j:
+                    travel_time[v][i,j] = raw.travel_time[v, o_port_i, o_port_j] + raw.cargo_origin_port_time[v, i]
+                    travel_time[v][i+n, j] = raw.travel_time[v, d_port_i, o_port_j] + raw.cargo_dest_port_time[v, i]
+                    travel_time[v][i+n, j+n] = raw.travel_time[v, d_port_i, d_port_j] + raw.cargo_dest_port_time[v,i]
+                    travel_cost[v][i,j] = raw.travel_cost[v, o_port_i, o_port_j] + raw.cargo_origin_port_cost[v, i]
+                    travel_cost[v][i+n, j] = raw.travel_cost[v, d_port_i, o_port_j] + raw.cargo_dest_port_cost[v, i]
+                    travel_cost[v][i+n, j+n] = raw.travel_cost[v, d_port_i, d_port_j] + raw.cargo_dest_port_cost[v,i]
+
+                travel_time[v][i,j+n] = raw.travel_time[v, o_port_i, d_port_j] + raw.cargo_origin_port_time[v, i]
+                travel_cost[v][i,j+n] = raw.travel_cost[v, o_port_i, d_port_j] + raw.cargo_origin_port_cost[v, i]
+
+            travel_time[v][i+n, d_depot] = raw.cargo_dest_port_time[v, i]
+            travel_cost[v][i+n, d_depot] = raw.cargo_dest_port_cost[v, i]
+
+    # These are allowed to be different for vehicles in the same group
+    travel_time_vehicle_origin_depot = {v : {} for v in V}
+    travel_cost_vehicle_origin_depot = {v: {} for v in V}
+
+
+    for v in V:
+        od_port = raw.vessel_start_port[v]
+        for i in P:
+            if i not in raw.vessel_compatible[v]:
+                continue
+
+            o_port_i = raw.cargo_origin[i]
+            travel_time_vehicle_origin_depot[v][i] = raw.travel_time[v, od_port, o_port_i]
+            travel_cost_vehicle_origin_depot[v][i] = raw.travel_cost[v, od_port, o_port_i]
+
+    vehicle_groups = {}
+    travel_time_vg = {}
+    travel_cost_vg = {}
+    capacity_vg = {}
+    P_compat_vg = {}
+    for v in V:
+        for vg in vehicle_groups:
+            if capacity_vg[vg] != raw.vessel_capacity[v]:
+                continue
+
+            for (i,j), t in travel_time[v].items():
+                c = travel_cost[v][i,j]
+
+                if (i,j) in travel_time_vg[vg]:
+                    if travel_time_vg[vg][i,j] != t or travel_cost_vg[vg][i,j] != c:
+                        break
+                else:
+                    pi = i if i < n else i-n
+                    pj = j if j < n else j-n
+                    assert not any({pi,pj} <= raw.vessel_compatible[vd] for vd in vehicle_groups[vg])
+
+            else:
+                vehicle_groups[vg].add(v)
+                travel_time_vg[vg].update(travel_time[v])
+                travel_cost_vg[vg].update(travel_cost[v])
+                P_compat_vg[vg] |= raw.vessel_compatible[v]
+                break
+
+        else:
+            vg = len(vehicle_groups)
+            vehicle_groups[vg] = {v}
+            travel_time_vg[vg] = travel_time[v]
+            travel_cost_vg[vg] = travel_cost[v]
+            capacity_vg[vg] = raw.vessel_capacity[v]
+            P_compat_vg[vg] = raw.vessel_compatible[v]
+
+        del travel_cost[v]
+        del travel_time[v]
+
+    vehicle_groups = frozendict((g,frozenset(grp)) for g,grp in vehicle_groups.items())
+    vehicle_groups_inv = frozendict((v,vg) for vg,Vg in vehicle_groups.items() for v in Vg)
+
+    # Now, after grouping, we may merge the travel_times and travel_costs to/from depots
+    char_v = {}
+    P_incompat = {v : frozenset(P) - raw.vessel_compatible[v] for v in V}
+    for vg, Vg in vehicle_groups.items():
+        for v in Vg:
+            o = o_depots[v]
+            travel_time_vg[vg].update({(o, i) : t for i,t in travel_time_vehicle_origin_depot[v].items()})
+            travel_cost_vg[vg].update({(o, i) : t for i,t in travel_cost_vehicle_origin_depot[v].items()})
+
+        for p in P_compat_vg[vg]:
+            _, v_char = min(
+                (max(tw_start[o_depots[v]] + travel_time_vehicle_origin_depot[v][p], tw_start[p]), v) for v in Vg
+                if p not in P_incompat[v]
+            )
+            char_v[vg,p] = v_char
+
+    P_incompat = frozendict(P_incompat)
 
     demand = frozendict(itertools.chain(
         raw.cargo_size.items(),
@@ -616,6 +777,7 @@ def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data
         demand=demand,
         vehicle_capacity=frozendict(capacity_vg),
         P_compatible=frozendict(P_compat_vg),
+        P_incompatible=P_incompat,
         customer_penalty=raw.cargo_penalty,
         tw_start=frozendict(tw_start),
         tw_end=frozendict(tw_end),
@@ -626,6 +788,7 @@ def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data
         group_by_vehicle=vehicle_groups_inv,
         char_vehicle=frozendict(char_v)
     )
+
 
 def get_named_instance_PDPTWLH(name, rehandling_cost=0) -> PDPTWLH_Data:
     problem_group = name[0]
@@ -671,20 +834,14 @@ def get_named_instance_DARP(name : str) -> DARP_Data:
     data = build_DARP_from_cordeau(raw, name)
     return data
 
-def get_named_instance_ITSRSP(name : str) -> ITSRSP_Data:
-    # for resolve in (resolve_name_hemmati, resolve_name_homsi):
-    #     try:
-    #         filename = resolve(name)
-    #         break
-    #     except ValueError:
-    #         continue
-    # else:
-    #     raise ValueError(f"{name} is not a valid ITSRSP instance name")
-
+def get_named_instance_ITSRSP(name : str, group_with_compat=True) -> ITSRSP_Data:
     raw = parse_format_hemmati_hdf5(resolve_name_hemmati_hdf5(name))
-    data = build_ITSRSP_from_hemmati(raw, name)
-    return data
+    if group_with_compat:
+        data = build_ITSRSP_from_hemmati(raw, name)
+    else:
+        data = build_ITSRSP_from_hemmati_aggressive_grouping(raw, name)
 
+    return data
 
 def get_named_instance_skeleton_ITSRSP(name : str) -> ITSRSP_Skeleton_Data:
     raw = parse_format_hemmati_hdf5_to_skeleton(resolve_name_hemmati_hdf5(name))
