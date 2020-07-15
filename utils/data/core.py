@@ -859,3 +859,9 @@ def get_index_file(dataset : str, **kwargs) -> Path:
     indexfile = datasets[dataset]
 
     return indexfile
+
+def get_name_by_index(dataset, idx : int):
+    with open(get_index_file(dataset), 'r') as f:
+        for _ in range(idx):
+            f.readline()
+        return f.readline().strip()

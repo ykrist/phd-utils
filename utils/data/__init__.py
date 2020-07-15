@@ -9,6 +9,7 @@ from .types import (
 )
 
 from .core import (
+    get_name_by_index,
     get_index_file,
     get_named_instance_DARP,
     get_named_instance_PDPTWLH,
