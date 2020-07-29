@@ -860,8 +860,25 @@ def get_index_file(dataset : str, **kwargs) -> Path:
 
     return indexfile
 
-def get_name_by_index(dataset, idx : int):
+
+_NAME_TO_INDEX = {}
+_INDEX_TO_NAME = {}
+
+def _ensure_index_name_map(dataset):
+    global _NAME_TO_INDEX, _INDEX_TO_NAME
+    if dataset in _NAME_TO_INDEX:
+        return
     with open(get_index_file(dataset), 'r') as f:
-        for _ in range(idx):
-            f.readline()
-        return f.readline().strip()
+        m = dict(enumerate(map(lambda s : s.strip(), f)))
+    m_inv = {v : k for k,v in m.items()}
+    _NAME_TO_INDEX[dataset] = m_inv
+    _INDEX_TO_NAME[dataset] = m
+
+def get_name_by_index(dataset, idx : int):
+    _ensure_index_name_map(dataset)
+    return _INDEX_TO_NAME[dataset][idx]
+
+def get_index_by_name(dataset, name: str):
+    _ensure_index_name_map(dataset)
+    return _NAME_TO_INDEX[dataset][name]
+
