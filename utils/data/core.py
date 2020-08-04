@@ -834,7 +834,7 @@ def get_named_instance_DARP(name : str) -> DARP_Data:
     data = build_DARP_from_cordeau(raw, name)
     return data
 
-def get_named_instance_ITSRSP(name : str, group_with_compat=True) -> ITSRSP_Data:
+def get_named_instance_ITSRSP(name : str, group_with_compat=False) -> ITSRSP_Data:
     raw = parse_format_hemmati_hdf5(resolve_name_hemmati_hdf5(name))
     if group_with_compat:
         data = build_ITSRSP_from_hemmati(raw, name)
