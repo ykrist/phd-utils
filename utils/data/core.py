@@ -850,7 +850,8 @@ def get_named_instance_skeleton_ITSRSP(name : str) -> ITSRSP_Skeleton_Data:
 
 def get_index_file(dataset : str, **kwargs) -> Path:
     datasets = {
-        'itsrsp' : data_directory("ITSRSP_hdf5_ti")/"INDEX.txt"
+        'itsrsp' : data_directory("ITSRSP_hdf5_ti")/"INDEX.txt",
+        'darp' : data_directory("DARP_cordeau")/"INDEX.txt"
     }
 
     if dataset not in datasets:
