@@ -19,4 +19,4 @@ from .core import (
     get_named_instance_skeleton_ITSRSP
 )
 
-from . import modify, rand, parse
+from . import modify, rand, parse, indices
