@@ -2,6 +2,7 @@ import oru.slurm
 from pathlib import Path
 
 _SLURM_PYTHON_FILE_TEMPLATE = r"""#!/bin/bash
+source ~/.profile
 conda activate or
 """
 
