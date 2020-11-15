@@ -16,7 +16,8 @@ from .core import (
     get_named_instance_PDPTWLH,
     get_named_instance_MSPRP,
     get_named_instance_ITSRSP,
-    get_named_instance_skeleton_ITSRSP
+    get_named_instance_skeleton_ITSRSP,
+    get_named_instance_SDARP,
 )
 
 from . import modify, rand, parse, indices

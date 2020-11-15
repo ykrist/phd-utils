@@ -20,6 +20,14 @@ def data_directory(subdir) -> Path:
         assert path.exists()
     return path
 
+def _resolve_name(name : str, data_dir : str, suffix = None):
+    datasubdir = data_directory(data_dir)
+    suffix = suffix or ""
+    path = datasubdir/f"{name}{suffix}"
+    if path.exists():
+        return path
+    raise ValueError(f"{name} is not a valid {data_dir} name")
+
 # name resolvers should be by dataset not by datatype
 _schrotenboer_filepattern_index = None
 def resolve_name_schrotenboer(name : str) -> Tuple[Path]:
@@ -38,41 +46,22 @@ def resolve_name_schrotenboer(name : str) -> Tuple[Path]:
     return _schrotenboer_filepattern_index[name]
 
 def resolve_name_cordeau_PDPTW(name : str) -> Path:
-    datasubdir = data_directory("PDPTW_cordeau")
-    path = datasubdir/name
-    if not os.path.exists(path):
-        raise ValueError(f"{name} is not a valid Cordeau-instance name")
-    return path
-
+    return _resolve_name(name, "PDPTW_cordeau")
 
 def resolve_name_cordeau_DARP(name : str) -> Path:
-    datasubdir = data_directory("DARP_cordeau")
-    path = datasubdir/f"{name}.txt"
-    if not os.path.exists(path):
-        raise ValueError(f"{name} is not a valid Cordeau-instance name")
-    return path
+    return _resolve_name(name, "DARP_cordeau", ".txt")
 
 def resolve_name_hemmati(name : str) -> Path:
-    datasubdir = data_directory('ITSRSP_hemmati')
-    path = datasubdir/f"{name}.txt"
-    if path.exists():
-       return path
-    raise ValueError(f"{name} is not a recognised ITSRSP Hemmati name")
+    return _resolve_name(name, 'ITSRSP_hemmati', ".txt")
 
 def resolve_name_homsi(name : str) -> Path:
-    datasubdir = data_directory('ITSRSP_homsi')
-    path = datasubdir/f"{name}.txt"
-    if path.exists():
-        return path
-    raise ValueError(f"{name} is not a recognised ITSRSP Homsi name")
+    return _resolve_name(name, 'ITSRSP_homsi', ".txt")
 
 def resolve_name_hemmati_hdf5(name : str) -> Path:
-    datasubdir = data_directory('ITSRSP_hdf5_ti')
-    path = datasubdir/f'{name}.hdf5'
-    if path.exists():
-        return path
-    raise ValueError(f"{name} is not a recognised ITSRSP HDF5 name")
+    return _resolve_name(name, 'ITSRSP_hdf5_ti', ".hdf5")
 
+def resolve_name_riedler(name : str) -> Path:
+    return _resolve_name(name, "SDARP_riedler", ".dat")
 
 # def load_cordeau_instance(path, rehandling_cost=None) -> PDPTW_Data:
 #     with open(path, 'r') as raw:
@@ -475,6 +464,7 @@ def build_DARP_from_cordeau(raw : RawDataCordeau, id_str : str) -> DARP_Data:
         id=id_str
     )
 
+
 def build_ITSRSP_from_hemmati(raw : RawDataHemmati, id_str : str) -> ITSRSP_Data:
     n = raw.num_cargos
     P = range(0, n)
@@ -834,6 +824,12 @@ def get_named_instance_DARP(name : str) -> DARP_Data:
     data = build_DARP_from_cordeau(raw, name)
     return data
 
+def get_named_instance_SDARP(name : str) -> DARP_Data:
+    filename = resolve_name_riedler(name)
+    raw = parse_format_riedler(filename)
+    data = build_DARP_from_cordeau(raw, name)
+    return dataclasses.replace(data, travel_cost=frozendict({a : 0 for a in data.travel_cost}))
+
 def get_named_instance_ITSRSP(name : str, group_with_compat=False) -> ITSRSP_Data:
     raw = parse_format_hemmati_hdf5(resolve_name_hemmati_hdf5(name))
     if group_with_compat:
@@ -851,7 +847,8 @@ def get_named_instance_skeleton_ITSRSP(name : str) -> ITSRSP_Skeleton_Data:
 def get_index_file(dataset : str, **kwargs) -> Path:
     datasets = {
         'itsrsp' : data_directory("ITSRSP_hdf5_ti")/"INDEX.txt",
-        'darp' : data_directory("DARP_cordeau")/"INDEX.txt"
+        'darp' : data_directory("DARP_cordeau")/"INDEX.txt",
+        'sdarp' : data_directory("SDARP_riedler")/"INDEX.txt",
     }
 
     if dataset not in datasets:

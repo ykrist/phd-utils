@@ -4,7 +4,15 @@ import itertools
 import re
 import h5py
 from .types import *
+import io
+from typing import Callable
 frozen_dataclass = dataclasses.dataclass(frozen=True)
+
+def _read_until(fp : io.TextIOBase, func : Callable[[str], bool]) -> Union[None, str]:
+    for l in fp:
+        if func(l):
+            return l
+    return None
 
 
 def parse_format_schrotenboer(depot_file, geninfo_file, jobs_file, maxtravel_file) -> RawDataSchrotenboer:
@@ -381,3 +389,64 @@ def parse_format_hemmati_hdf5_to_skeleton(path) -> ITSRSP_Skeleton_Data:
     d_depot = 2*n+v
 
     return ITSRSP_Skeleton_Data(id="", n=n, P=P, D=D, V=V, o_depots=o_depots, d_depot=d_depot)
+
+def parse_format_riedler(path) -> RawDataCordeau:
+    with open(path, 'r') as fp:
+        num_requests = int(_read_until(fp, lambda x : x.startswith("|N|")).split()[-1])
+        num_vehicles = int(_read_until(fp, lambda x : x.startswith("|K|")).split()[-1])
+        max_ride_time = int(_read_until(fp, lambda x : x.startswith("L")).split()[-1])
+
+        o_depot = 0
+        d_depot = num_requests*2 + 1
+        depot_info = list(map(float, _read_until(fp, lambda x : x.startswith("Depot:")).split()[1:]))
+        pos_x = { d_depot : depot_info[0], o_depot: depot_info[0]}
+        pos_y = { d_depot : depot_info[1], o_depot: depot_info[1]}
+        tw_start = { d_depot : depot_info[2], o_depot: depot_info[2]}
+        tw_end = { d_depot : depot_info[3], o_depot: depot_info[3]}
+        service_time = {d_depot : 0, o_depot: 0}
+        demand = {}
+
+        _read_until(fp, lambda x : x.startswith("Vehicles"))
+        v_info = fp.readline().split()
+        vehicle_capacity = int(v_info[0])
+        max_route_time = int(v_info[1])
+        for i in range(num_vehicles-1): # check vehicles are identical
+            _v_info = fp.readline().split()
+            assert v_info == _v_info
+
+        _read_until(fp, lambda x : x.startswith("Requests"))
+        for p,line in zip(range(1, num_requests+1), fp):
+            line = map(float, line.split())
+            d = p + num_requests
+            pos_x[p] = next(line)
+            pos_y[p] = next(line)
+            tw_start[p] = next(line)
+            tw_end[p] = next(line)
+
+            pos_x[d] = next(line)
+            pos_y[d] = next(line)
+            tw_start[d] = next(line)
+            tw_end[d] = next(line)
+
+            service_time[p] = next(line)
+            service_time[d] = service_time[p]
+
+            demand[p] = next(line)
+            demand[d] = -demand[p]
+
+        assert len(pos_x) == 2*num_requests + 2
+
+        return RawDataCordeau(
+            num_requests=num_requests,
+            num_vehicles=num_vehicles,
+            max_ride_time=max_ride_time,
+            max_route_duration=max_route_time,
+            vehicle_cap=vehicle_capacity,
+            pos_x=frozendict(pos_x),
+            pos_y=frozendict(pos_y),
+            tw_start=frozendict(tw_start),
+            tw_end=frozendict(tw_end),
+            demand=frozendict(demand),
+            service_time=frozendict(service_time)
+        )
+
