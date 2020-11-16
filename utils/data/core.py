@@ -819,8 +819,16 @@ def get_named_instance_MSPRP(name : str) -> MSPRP_Data:
     return build_MSPRP_from_schrotenboer(rawdata, name)
 
 def get_named_instance_DARP(name : str) -> DARP_Data:
-    filename = resolve_name_cordeau_DARP(name)
-    raw = parse_format_cordeau(filename)
+    rielder = False
+    try:
+        filename = resolve_name_cordeau_DARP(name)
+    except ValueError:
+        rielder = True
+    if not rielder:
+        raw = parse_format_cordeau(filename)
+    else:
+        filename = resolve_name_riedler(name)
+        raw = parse_format_riedler(filename)
     data = build_DARP_from_cordeau(raw, name)
     return data
 
@@ -868,6 +876,10 @@ def _ensure_index_name_map(dataset):
         return
     with open(get_index_file(dataset), 'r') as f:
         m = dict(enumerate(map(lambda s : s.strip(), f)))
+    if dataset == "darp":
+        _ensure_index_name_map("sdarp")
+        offset = len(m)
+        m.update({i + offset: n for i,n in _INDEX_TO_NAME.items()})
     m_inv = {v : k for k,v in m.items()}
     _NAME_TO_INDEX[dataset] = m_inv
     _INDEX_TO_NAME[dataset] = m

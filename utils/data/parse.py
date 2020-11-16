@@ -428,11 +428,13 @@ def parse_format_riedler(path) -> RawDataCordeau:
             tw_start[d] = next(line)
             tw_end[d] = next(line)
 
+            # NOTE: the README is wrong, the last thing on the line is the service time, not the demand (c.f. riedler2018)
+            demand[p] = next(line)
+            demand[d] = -demand[p]
+
             service_time[p] = next(line)
             service_time[d] = service_time[p]
 
-            demand[p] = next(line)
-            demand[d] = -demand[p]
 
         assert len(pos_x) == 2*num_requests + 2
 
