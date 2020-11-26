@@ -1,0 +1,30 @@
+#!/usr/bin/env python
+import json
+from oru.posix import *
+import argparse
+
+
+def process_log_line(log):
+    kv = log.get("fields", {})
+    kv["target"] = log["target"]
+    spans = []
+    for span in log.get("spans", []):
+        spans.append(span.pop("name"))
+        kv.update(span)
+    kv['spans'] = spans
+    return kv
+
+if __name__ == '__main__':
+    setup_sigpipe()
+    p = argparse.ArgumentParser()
+    p.add_argument("input", default="-", nargs="?")
+    p.add_argument("output", default="-", nargs="?")
+    args = p.parse_args()
+
+    with open_default_stdin(args.input) as fp_in, open_default_stdout(args.output) as fp_out:
+        for line in fp_in:
+            json.dump(process_log_line(json.loads(line)), fp_out)
+            fp_out.write("\n")
+            fp_out.flush()
+
+
