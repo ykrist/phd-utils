@@ -879,7 +879,7 @@ def _ensure_index_name_map(dataset):
     if dataset == "darp":
         _ensure_index_name_map("sdarp")
         offset = len(m)
-        m.update({i + offset: n for i,n in _INDEX_TO_NAME.items()})
+        m.update({i + offset: n for i,n in _INDEX_TO_NAME['sdarp'].items()})
     m_inv = {v : k for k,v in m.items()}
     _NAME_TO_INDEX[dataset] = m_inv
     _INDEX_TO_NAME[dataset] = m
