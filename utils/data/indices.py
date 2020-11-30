@@ -105,6 +105,8 @@ def main_func(dataset : str, named_datasets : Dict[str, FrozenSet[int]]) -> NoRe
     g = p.add_mutually_exclusive_group()
     g.add_argument('-c', '--concise', action='store_true', help='concise single-line format compatible with Slurm array specs')
     g.add_argument('-n', '--name', action='store_true', help='Print names instead of indices.')
+    g.add_argument('-m', '--map', action='store_true', help="Print map from index to name")
+    g.add_argument('-r', '--rev-map', action='store_true', help="Like --map but reversed")
     args = p.parse_args()
 
     try:
@@ -119,6 +121,12 @@ def main_func(dataset : str, named_datasets : Dict[str, FrozenSet[int]]) -> NoRe
     elif args.name:
         for i in sorted(selection):
             print(get_name_by_index(dataset, i))
+    elif args.map:
+        for i in sorted(selection):
+            print(f"{i} {get_name_by_index(dataset, i)}")
+    elif args.rev_map:
+        for i in sorted(selection):
+            print(f"{get_name_by_index(dataset, i)} {i}")
     else:
         for i in sorted(selection):
             print(i)
