@@ -779,6 +779,33 @@ def build_ITSRSP_from_hemmati_aggressive_grouping(raw : RawDataHemmati, id_str :
         char_vehicle=frozendict(char_v)
     )
 
+SDARP_TIME_SCALE = 10**5
+
+def convert_darp_to_sdarp(data: DARP_Data) -> SDARP_Data:
+    def round_demand(x):
+        y = round(x)
+        assert math.isclose(x,y)
+        return y
+
+    round_time = lambda t : round(t*SDARP_TIME_SCALE)
+
+    return SDARP_Data(
+        travel_time = map_values(round_time, data.travel_time),
+        demand = map_values(round_demand, data.demand),
+        tw_start = map_values(round_time, data.tw_start),
+        tw_end = map_values(round_time, data.tw_end),
+        service_time = map_values(round_time, data.service_time),
+        max_ride_time = map_values(round_time, data.max_ride_time),
+        capacity = round_demand(data.capacity),
+        n = data.n,
+        o_depot = 0,
+        d_depot = 2*data.n + 1,
+        P = data.P,
+        D = data.D,
+        K = data.K,
+        N = data.N,
+        id=data.id,
+    )
 
 def get_named_instance_PDPTWLH(name, rehandling_cost=0) -> PDPTWLH_Data:
     problem_group = name[0]
@@ -832,11 +859,12 @@ def get_named_instance_DARP(name : str) -> DARP_Data:
     data = build_DARP_from_cordeau(raw, name)
     return data
 
-def get_named_instance_SDARP(name : str) -> DARP_Data:
+def get_named_instance_SDARP(name : str) -> SDARP_Data:
     filename = resolve_name_riedler(name)
     raw = parse_format_riedler(filename)
     data = build_DARP_from_cordeau(raw, name)
-    return dataclasses.replace(data, travel_cost=frozendict({a : 0 for a in data.travel_cost}))
+    return convert_darp_to_sdarp(data)
+
 
 def get_named_instance_ITSRSP(name : str, group_with_compat=False) -> ITSRSP_Data:
     raw = parse_format_hemmati_hdf5(resolve_name_hemmati_hdf5(name))

@@ -1,9 +1,9 @@
-from oru import frozendict, LazyHashFrozenDataclass
+from oru import frozendict, LazyHashFrozenDataclass, map_values
 import dataclasses
 from typing import Union, Sequence, FrozenSet, Tuple
 from . import utils as _u
 from .ipc import MsgPackSerialisableDataclass
-
+import math
 frozen_dataclass = dataclasses.dataclass(frozen=True)
 
 
@@ -32,6 +32,28 @@ class DARP_Data(ProblemDataBase):
     D: range
     K: range
     N: range
+
+
+@frozen_dataclass
+class SDARP_Data(ProblemDataBase):
+    travel_time: frozendict  # +idx:IJ
+    demand: frozendict  # +idx:IJ
+    tw_start: frozendict  # +idx:I
+    tw_end: frozendict  # +idx:I
+
+    # Note: the max_ride_time includes the service time, but service_time is needed for some modify.* functionality
+    service_time: frozendict  # +idx:I
+    max_ride_time: frozendict  # +idx:I
+    capacity: int
+
+    n: int
+    o_depot : int
+    d_depot : int
+    P: range
+    D: range
+    K: range
+    N: range
+
 
 
 @frozen_dataclass
@@ -93,33 +115,6 @@ class MSPRP_Data(GenMSPRP_Data):
 
     # indexed by i,t
     late_penalty: frozendict
-
-    #
-    # def convert_to_general_form(self) -> GenMSPRP_Data:
-    #     travel_time = {(i,j,k,t) : v for (i,j,k),v in self.travel_time.items() for t in self.T}
-    #     travel_cost = {(i,j,k,t) : v1+self.late_penalty.get((i,t),0) for (i,j,k),v1 in self.travel_cost.items() for t in self.T}
-    #     servicemen_cost = {(l,t) : v for l,v in self.servicemen_cost.items() for t in self.T}
-    #     servicemen_max = {(l,t) : v for l,v in self.servicemen_max.items() for t in self.T}
-    #     return GenMSPRP_Data(
-    #         servicemen_demand=self.servicemen_demand,
-    #         servicemen_max=frozendict(servicemen_max),
-    #         servicemen_capacity=self.servicemen_capacity,
-    #         servicemen_cost = frozendict(servicemen_cost),
-    #         service_time=self.service_time,
-    #         travel_time = frozendict(travel_time),
-    #         travel_cost = frozendict(travel_cost),
-    #         parts_demand=self.parts_demand,
-    #         parts_capacity=self.parts_capacity,
-    #         travel_time_max=self.travel_time_max,
-    #         nr=self.nr,
-    #         Nd=self.Nd,
-    #         Np=self.Np,
-    #         loc=self.loc,
-    #         T=self.T,
-    #         L=self.L,
-    #         K=self.K,
-    #         id=self.id
-    #     )
 
     def reduce_size(self, req_keep: Union[int, Sequence]):
         node_map, num_req_keep = _u.get_node_map(req_keep, self.nr)
