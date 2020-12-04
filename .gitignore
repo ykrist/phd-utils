@@ -3,3 +3,5 @@
 __pycache__
 gurobi.log
 cache/
+**/.pytest_cache/
+.hypothesis/
