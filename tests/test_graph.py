@@ -4,6 +4,7 @@ import hypothesis as hyp
 import hypothesis.strategies as strats
 from utils.graph import *
 
+
 def _construct_graph_dict(paths, cycles):
     graph = {}
     for edges, val in itertools.chain(paths, cycles):
