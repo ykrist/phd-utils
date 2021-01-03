@@ -1,6 +1,7 @@
 from .types import (
     DARP_Data,
     SDARP_Data,
+    SDARP_Skeleton_Data,
     PDPTWLH_Data,
     PDPTW_Data,
     MSPRP_Data,
@@ -19,6 +20,7 @@ from .core import (
     get_named_instance_ITSRSP,
     get_named_instance_skeleton_ITSRSP,
     get_named_instance_SDARP,
+    get_named_instance_skeleton_SDARP,
 )
 
 from . import modify, rand, parse, indices

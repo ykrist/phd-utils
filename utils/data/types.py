@@ -42,7 +42,7 @@ class SDARP_Data(ProblemDataBase):
     tw_end: frozendict  # +idx:I
 
     # Note: the max_ride_time includes the service time, but service_time is needed for some modify.* functionality
-    service_time: frozendict  # +idx:I
+    # service_time: frozendict  # +idx:I
     max_ride_time: frozendict  # +idx:I
     capacity: int
 
@@ -55,6 +55,15 @@ class SDARP_Data(ProblemDataBase):
     N: range
 
 
+@frozen_dataclass
+class SDARP_Skeleton_Data(ProblemDataBase):
+    n: int
+    o_depot : int
+    d_depot : int
+    P: range
+    D: range
+    K: range
+    N: range
 
 @frozen_dataclass
 class PDPTW_Data(ProblemDataBase):
