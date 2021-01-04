@@ -1,10 +1,11 @@
 import oru.slurm
+from oru.constants import CONDA_INFO
 from pathlib import Path
 
 _SLURM_PYTHON_FILE_TEMPLATE = r"""#!/bin/bash
 source ~/.profile
-conda activate or
-"""
+conda activate {active_prefix_name}
+""".format_map(CONDA_INFO)
 
 # FIXME this is a hack, not portable
 def _repo_root() -> Path:

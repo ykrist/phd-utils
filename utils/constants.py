@@ -4,6 +4,9 @@ import colorama
 import re as _re
 from warnings import warn
 from pathlib import Path
+import yaml
+import sys
+
 TTYCOLORS = colorama.Fore
 EPS = 1e-5
 DATA_DIR = (Path(__file__).parent/'../../../data').resolve()
@@ -24,3 +27,19 @@ if 'SLURM_CPUS_PER_TASK' in _os.environ:
 else:
     import multiprocessing as _mp
     N_CPUS = _mp.cpu_count()
+
+def _load_config():
+    config_path = Path(__file__).parent/"config.yaml"
+    try:
+
+        with open(config_path, "r") as fp:
+            config = yaml.load(fp, yaml.CSafeLoader)
+    except FileNotFoundError:
+        print(f"you need to create {config_path.resolve()!s} first", file=sys.stderr)
+        raise
+    except yaml.YAMLError:
+        raise Exception("bad config file format")
+
+_CONFIG = _load_config()
+DATA_ROOT = _CONFIG["data-root"]
+LOG_ROOT = _CONFIG["log-root"]
