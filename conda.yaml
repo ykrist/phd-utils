@@ -1,0 +1,4 @@
+name: phd-utils
+package-root: utils/
+bin-paths:
+  - bin/

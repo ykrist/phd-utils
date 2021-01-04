@@ -1,0 +1,4 @@
+# relative (to this file) path to root data folder
+data-root: ../../data
+# relative (to this file) path to root log folder
+log-root: ../../logs
