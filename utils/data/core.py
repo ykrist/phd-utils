@@ -610,17 +610,16 @@ def get_named_instance_skeleton_ITSRSP(name: str) -> ITSRSP_Skeleton_Data:
 
 
 def get_index_file(dataset: str, **kwargs) -> Path:
-    datasets = {
-        'itsrsp': data_directory("ITSRSP_hdf5_ti") / "INDEX.txt",
-        'darp': data_directory("DARP_cordeau") / "INDEX.txt",
-        'sdarp': data_directory("SDARP_riedler") / "INDEX.txt",
+    data_subdir = {
+        'itsrsp': "ITSRSP_hdf5_ti",
+        'darp': "DARP_cordeau",
+        'sdarp': "SDARP_riedler",
     }
 
-    if dataset not in datasets:
+    if dataset not in data_subdir:
         raise ValueError(f"no known index file for `{dataset!s}`")
 
-    indexfile = datasets[dataset]
-
+    indexfile = data_directory(data_subdir[dataset]) / "INDEX.txt"
     return indexfile
 
 
@@ -634,7 +633,7 @@ def _ensure_index_name_map(dataset):
         return
     with open(get_index_file(dataset), 'r') as f:
         m = dict(enumerate(map(lambda s: s.strip(), f)))
-    if dataset == "darp":
+    if dataset == "sdarp":
         _ensure_index_name_map("sdarp")
         offset = len(m)
         m.update({i + offset: n for i, n in _INDEX_TO_NAME['sdarp'].items()})

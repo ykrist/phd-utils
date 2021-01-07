@@ -3,4 +3,3 @@
 data-root: ../../data
 # Path to root log directory
 log-root: ../../logs
-

@@ -1,4 +1,4 @@
 name: phd-utils
-package-root: utils/
+package-root: .
 bin-paths:
   - bin/
