@@ -1,4 +1,6 @@
-# relative (to this file) path to root data folder
+# Paths can be absolute, in which case they start with /, otherwise they are relative to this file.
+# Path to root data directory
 data-root: ../../data
-# relative (to this file) path to root log folder
+# Path to root log directory
 log-root: ../../logs
+
