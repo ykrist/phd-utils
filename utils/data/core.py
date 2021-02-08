@@ -631,13 +631,11 @@ def _ensure_index_name_map(dataset):
     global _NAME_TO_INDEX, _INDEX_TO_NAME
     if dataset in _NAME_TO_INDEX:
         return
+
     with open(get_index_file(dataset), 'r') as f:
         m = dict(enumerate(map(lambda s: s.strip(), f)))
-    if dataset == "sdarp":
-        _ensure_index_name_map("sdarp")
-        offset = len(m)
-        m.update({i + offset: n for i, n in _INDEX_TO_NAME['sdarp'].items()})
     m_inv = {v: k for k, v in m.items()}
+
     _NAME_TO_INDEX[dataset] = m_inv
     _INDEX_TO_NAME[dataset] = m
 
