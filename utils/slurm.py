@@ -1,12 +1,12 @@
 import oru.slurm
-from oru.constants import CONDA_INFO
+from oru.constants import get_conda_info
 from .constants import LOGS_DIR
 from pathlib import Path
 
 _SLURM_PYTHON_FILE_TEMPLATE = r"""#!/bin/bash
 source ~/.profile
 conda activate {active_prefix_name}
-""".format_map(CONDA_INFO)
+""".format_map(get_conda_info())
 
 
 class BaseExperiment(oru.slurm.Experiment):
