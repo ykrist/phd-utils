@@ -81,6 +81,48 @@ class PDPTW_Data(ProblemDataBase):
 
 
 @frozen_dataclass
+class APVRP_Data(ProblemDataBase):
+    depot: int = dataclasses.field(init=False)
+
+    n_req: int
+    n_passive: int
+    n_active: int
+    n_loc: int
+
+    R: range = dataclasses.field(init=False) # requests
+    R_P: range = dataclasses.field(init=False)  # request pickups
+    R_D: range = dataclasses.field(init=False)  # request deliveries
+    PV: range = dataclasses.field(init=False) # passive vehicles
+    PV_P: range = dataclasses.field(init=False) # passive vehicles (pickups)
+    PV_D: range = dataclasses.field(init=False) # passive vehicles (deliveries)
+    L: range = dataclasses.field(init=False) # all locations
+
+    tw_start: frozendict
+    tw_end: frozendict
+    srv_time: frozendict
+
+    compat_req_passive: frozendict
+    compat_passive_req: frozendict
+    compat_passive_active: frozendict
+
+    travel_cost: frozendict
+    travel_time: frozendict
+
+    def __post_init__(self):
+        p = self.n_passive
+        n = self.n_req
+        object.__setattr__(self, 'depot', 0)
+        object.__setattr__(self, 'PV', range(1, 2*p + 1))
+        object.__setattr__(self, 'PV_P', range(1, p + 1))
+        object.__setattr__(self, 'PV_D', range(p+1, 2*p + 1))
+        object.__setattr__(self, 'R', range(2*p + 1, 2*p + 2*n + 1))
+        object.__setattr__(self, 'R_P', range(2*p + 1, 2*p + n + 1))
+        object.__setattr__(self, 'R_D', range(2*p + n + 1, 2*p + 2*n + 1))
+        object.__setattr__(self, 'L', range(2*p + 2*n + 1))
+
+        super(APVRP_Data, self).__post_init__()
+
+@frozen_dataclass
 class PDPTWLH_Data(PDPTW_Data):
     rehandle_cost: float
 

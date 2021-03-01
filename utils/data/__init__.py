@@ -7,7 +7,8 @@ from .types import (
     MSPRP_Data,
     GenMSPRP_Data,
     ITSRSP_Data,
-    ITSRSP_Skeleton_Data
+    ITSRSP_Skeleton_Data,
+    APVRP_Data,
 )
 
 from .core import (
