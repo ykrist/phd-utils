@@ -97,6 +97,7 @@ class APVRP_Data(ProblemDataBase):
     PV_D: range = dataclasses.field(init=False) # passive vehicles (deliveries)
     L: range = dataclasses.field(init=False) # all locations
 
+    tmax: int
     tw_start: frozendict
     tw_end: frozendict
     srv_time: frozendict
