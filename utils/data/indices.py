@@ -94,7 +94,7 @@ def set_from_ranges_inc(l: List[Tuple[int, int]]) -> FrozenSet[int]:
     return frozenset(itertools.chain(*(range(s, e + 1) for s, e in l)))
 
 
-def main_func(dataset : str, named_datasets : Dict[str, FrozenSet[int]]) -> NoReturn:
+def main_func(dataset : str, named_datasets : Dict[str, FrozenSet[int]], index_to_name = None) -> NoReturn:
     import argparse
     import sys
     p = argparse.ArgumentParser()
@@ -116,17 +116,19 @@ def main_func(dataset : str, named_datasets : Dict[str, FrozenSet[int]]) -> NoRe
         print(str(e), file=sys.stderr)
         sys.exit(1)
 
+    index_to_name = index_to_name or (lambda i : get_name_by_index(dataset, i))
+
     if args.concise:
         print(format_dataset_index_range(selection))
     elif args.name:
         for i in sorted(selection):
-            print(get_name_by_index(dataset, i))
+            print(index_to_name(i))
     elif args.map:
         for i in sorted(selection):
-            print(f"{i} {get_name_by_index(dataset, i)}")
+            print(f"{i} {index_to_name(i)}")
     elif args.rev_map:
         for i in sorted(selection):
-            print(f"{get_name_by_index(dataset, i)} {i}")
+            print(f"{index_to_name(i)} {i}")
     else:
         for i in sorted(selection):
             print(i)
