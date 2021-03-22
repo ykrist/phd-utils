@@ -82,7 +82,8 @@ class PDPTW_Data(ProblemDataBase):
 
 @frozen_dataclass
 class APVRP_Data(ProblemDataBase):
-    depot: int = dataclasses.field(init=False)
+    odepot: int = dataclasses.field(init=False)
+    ddepot: int = dataclasses.field(init=False)
 
     n_req: int
     n_passive: int
@@ -112,7 +113,8 @@ class APVRP_Data(ProblemDataBase):
     def __post_init__(self):
         p = self.n_passive
         n = self.n_req
-        object.__setattr__(self, 'depot', 0)
+        object.__setattr__(self, 'odepot', 0)
+        object.__setattr__(self, 'ddepot', 2*p + 2*n + 1)
         object.__setattr__(self, 'PV', range(1, 2*p + 1))
         object.__setattr__(self, 'PV_P', range(1, p + 1))
         object.__setattr__(self, 'PV_D', range(p+1, 2*p + 1))
