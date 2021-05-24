@@ -25,7 +25,7 @@ def get_expr_parser():
         | "-"
         | "|"
     
-    NAME: ("a".."z" | "A".."Z" )+
+    NAME: ("a".."z" | "A".."Z" | "_" )+
     
     %import common.WS_INLINE
     %ignore WS_INLINE
