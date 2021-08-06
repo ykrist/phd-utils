@@ -75,6 +75,10 @@ def resolve_name_riedler(name: str) -> Path:
     return _resolve_name(name, "SDARP_riedler", ".dat")
 
 
+def resolve_name_sdarp_hard(name: str) -> Path:
+    return _resolve_name(name, "SDARP_hard", ".dat")
+
+
 def build_PDPTWLH_from_cordeau(raw: RawDataCordeau, vehicle_cost: float, rehandling_cost: float,
                                id_str: str) -> PDPTWLH_Data:
     n = raw.num_requests
@@ -576,8 +580,8 @@ def get_named_instance_SDARP(name: str) -> SDARP_Data:
 
 
 def get_named_instance_skeleton_SDARP(name: str) -> SDARP_Skeleton_Data:
-    match = re.match(r"(?P<n>\d+)N_(?P<k>\d+)K_[ABC]", name)
-    assert match is not None
+    match = re.match(r"(?P<n>\d+)N_(?P<k>\d+)K(_2TW)?_[A-Z]", name)
+    assert match is not None, "Failed to parse filename"
     match = match.groupdict()
     n = int(match['n'])
     k = int(match['k'])
@@ -609,31 +613,39 @@ def get_named_instance_skeleton_ITSRSP(name: str) -> ITSRSP_Skeleton_Data:
     return dataclasses.replace(raw, id=name)
 
 
-def get_index_file(dataset: str, **kwargs) -> Path:
-    data_subdir = {
-        'itsrsp': "ITSRSP_hdf5_ti",
-        'darp': "DARP_cordeau",
-        'sdarp': "SDARP_riedler",
+def get_index_files(dataset: str) -> List[Path]:
+    data_subdirs = {
+        'itsrsp': ("ITSRSP_hdf5_ti", ),
+        'darp': ("DARP_cordeau", ),
+        'sdarp': ("SDARP_riedler", "SDARP_hard"),
     }
 
-    if dataset not in data_subdir:
-        raise ValueError(f"no known index file for `{dataset!s}`")
+    if dataset not in data_subdirs:
+        raise ValueError(f"no known index file(s) for `{dataset!s}`")
 
-    indexfile = data_directory(data_subdir[dataset]) / "INDEX.txt"
-    return indexfile
+    return [d / "INDEX.txt" for d in map(data_directory, data_subdirs[dataset])]
 
 
 _NAME_TO_INDEX = {}
 _INDEX_TO_NAME = {}
 
+def _load_index_name_map(dataset):
+    k = 0
+    m = {}
+    for idx in get_index_files(dataset):
+        with open(idx, "r") as fp:
+            for name in fp:
+                m[k] = name.strip()
+                k += 1
+
+    return m
 
 def _ensure_index_name_map(dataset):
     global _NAME_TO_INDEX, _INDEX_TO_NAME
     if dataset in _NAME_TO_INDEX:
         return
 
-    with open(get_index_file(dataset), 'r') as f:
-        m = dict(enumerate(map(lambda s: s.strip(), f)))
+    m = _load_index_name_map(dataset)
     m_inv = {v: k for k, v in m.items()}
 
     _NAME_TO_INDEX[dataset] = m_inv
