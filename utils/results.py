@@ -16,6 +16,16 @@ class Config:
     scratch_path: Path = dataclasses.field(default_factory=lambda: Path.cwd() / "raw")
     archive_sources: Path = dataclasses.field(default_factory=lambda: Path.cwd() / "result_parts")
 
+class AggBase:
+    pass
+
+class AggMultiColumnsBase:
+    def __init__(self):
+        self.cols = []
+
+    def aggregate(self, solved_mask: np.ndarray, **col_values: np.ndarray) -> Union[Dict[str, Any], Any]:
+        raise NotImplementedError
+
 class AggSimpleBase:
     def aggregate(self, values: np.ndarray):
         raise NotImplementedError
@@ -116,6 +126,11 @@ class Aggregator:
             columns["num_total"].append(len(samples))
 
             for c, agg in self.columns.items():
+                if isinstance(agg, AggMultiColumnsBase):
+                    cols = { k : samples[k].values for k in agg.cols }
+                    columns[c].append(agg.aggregate(solve_mask, **cols))
+                    continue
+
                 if c not in samples.columns:
                     if self.ignore_missing_cols:
                         continue
@@ -129,13 +144,12 @@ class Aggregator:
                     assert not np.isnan(values).any(), f"NaNs in column {c}"
 
                 if isinstance(agg, AggSimpleBase):
-                    val = agg.aggregate(values)
+                    columns[c].append(agg.aggregate(values))
                 elif isinstance(agg, AggOnSolvedBase):
-                    val = agg.aggregate(solve_mask, values)
+                    columns[c].append(agg.aggregate(solve_mask, values))
                 else:
                     raise NotImplementedError("aggregators must subclass AggSimpleBase or AggOnSolvedBase")
 
-                columns[c].append(val)
 
         columns = {n: c for n, c in columns.items() if len(c) > 0}
         aggdf = pd.DataFrame.from_dict(columns)
@@ -181,7 +195,7 @@ class Extractor:
         print(f"Extracting to {self.config.scratch_path.relative_to(Path.cwd())!s}/")
         for arcv in archives:
             print(f"Extracting {arcv.relative_to(Path.cwd())!s} ... ", end='')
-            subprocess.check_output(["tar", "-Jxf", arcv.absolute()], cwd=self.config.scratch_path.absolute())
+            subprocess.check_output(["tar", "-Jxf", str(arcv.absolute())], cwd=self.config.scratch_path.absolute())
             print("done")
 
         self.post_extract()
@@ -226,7 +240,7 @@ class Extractor:
         p.add_argument("f", "force", action="store_true")
         return p.parse_args().force
 
-def parse_gurobi_status(s) -> int:
+def force_nonnegative_int(s) -> int:
     if not s:
         return -1
     try:
