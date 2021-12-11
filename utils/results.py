@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Union, Dict, Callable, Any, List, Tuple
+from typing import Optional, Set, Union, Dict, Callable, Any, List, Tuple
 from pathlib import Path
 import pandas as pd
 import json
@@ -64,7 +64,6 @@ class AggBase:
 
         return f'{self.__class__.__name__}({inner})'
 
-
 class AggOneToOne(AggBase):
     def __init__(self, src: str, dst: str = None):
         dst = src if dst is None else dst
@@ -72,6 +71,7 @@ class AggOneToOne(AggBase):
 
     def aggregate(self, values: np.ndarray):
         raise NotImplementedError
+
 
 class AggOneToOneMasked(AggBase):
     def __init__(self, src: str, dst: str = None):
@@ -180,8 +180,10 @@ class Aggregator:
                  col_map=None,
                  ignore_missing_cols=False,
                  assert_length=None,
+                 ignore_nan_in_agg=None
                  ):
 
+        self.ignore_nan_in_agg = ignore_nan_in_agg or set()
         self.ignore_missing_cols = ignore_missing_cols
         self.config = file_config
         self.col_defaults = col_defaults or {}
@@ -260,7 +262,10 @@ class Aggregator:
 
         aggdf = pd.DataFrame.from_dict(dst_columns)
         aggdf.set_index(self.index_col, inplace=True)
-        assert not aggdf.isna().any(None), "NaNs in aggregated data, use col_defaults=... in the constructor to specify default values for source columns."
+    
+        na_cols = [c for c, has_na in aggdf.isna().any().iteritems() if has_na and c not in self.ignore_nan_in_agg]
+        assert not na_cols, f"NaNs in aggregated data ({', '.join(na_cols)}), use col_defaults or ignore_nan_in_agg"
+
         return params, aggdf
 
     @property
@@ -289,7 +294,7 @@ class Aggregator:
         self.config.aggregate_path.mkdir(exist_ok=True, parents=True)
         csvs = self.find_csvs()
 
-        with tqdm.tqdm(total=len(csvs), desc="Aggregating samples", colour='cyan') as bar:
+        with tqdm.tqdm(total=len(csvs), desc="Aggregating samples") as bar:
             self.progbar = bar
             for groupname, g in self.find_csvs().items():
                 params, df = self.aggregate_group(g)
