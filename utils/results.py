@@ -311,8 +311,11 @@ class Extractor:
         self.config = config
         self.progbar = None
 
+    def list_archives(self) -> List[Path]:
+        return sorted(self.config.archive_sources.glob("*.tar.xz"))
+
     def run(self, force=False):
-        archives = sorted(self.config.archive_sources.glob("*.tar.xz"))
+        archives = self.list_archives()
 
         if not force and self.config.scratch_path.exists():
             return
